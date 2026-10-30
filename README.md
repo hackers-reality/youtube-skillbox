@@ -59,7 +59,7 @@ Channel: https://www.youtube.com/@MrBeast
   videos   : 805
   shorts   : 205
   streams  : no tab
-  shows    : 3
+  shows    : 5
   playlists: no tab
   community: 20+ posts (use `posts` to read them)
 ```
