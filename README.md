@@ -28,7 +28,7 @@ Watch the agent in action — OpenCode fetching MKBHD's full channel breakdown (
 
 <div align="center">
   <a href="https://www.youtube.com/watch?v=y9U_ZeJ713M" target="_blank">
-    <img src="https://img.youtube.com/vi/y9U_ZeJ713M/hqdefault.jpg" alt="YouTube Skillbox Demo" width="80%">
+    <img src="assets/demo_thumbnail.jpg" alt="YouTube Skillbox Demo" width="80%">
   </a>
   <br>
   <sub>Click to watch on YouTube →</sub>
