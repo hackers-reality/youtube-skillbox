@@ -10,12 +10,47 @@
 </p>
 
 <p align="center">
+  <a href="#-table-of-contents">Table of Contents</a> ·
+  <a href="#-demo">Demo</a> ·
   <a href="#-the-youtube-research-skill">Research</a> ·
   <a href="#-the-transcript-skill">Transcripts</a> ·
   <a href="#-when-yt-dlp-cant-do-it-we-build-it">Gap-fill engine</a> ·
   <a href="#%EF%B8%8F-the-11-creator-skills">Creator tools</a> ·
-  <a href="#-install">Install</a>
+  <a href="#-install">Install</a> ·
+  <a href="#-have-your-agent-set-it-up-for-you">Agent prompt</a>
 </p>
+
+---
+
+## 📺 Demo
+
+Watch the agent in action — OpenCode fetching MKBHD's full channel breakdown (tab counts, home shelves with Featured Channels URLs, paginated community posts, and a timestamped transcript):
+
+<div align="center">
+  <a href="assets/Demo_compressed.mp4">
+    <img src="assets/banner.png" alt="YouTube Skillbox Demo" width="80%">
+  </a>
+  <br>
+  <sub>Click to play · <a href="assets/Demo_compressed.mp4">Direct MP4 link (16 MB)</a></sub>
+</div>
+
+---
+
+## 📋 Table of Contents
+
+| Section | Description |
+|---------|-------------|
+| [📺 Demo](#-demo) | Video walkthrough of the agent using the skills |
+| [What is this?](#what-is-this) | Overview of the two-layer architecture |
+| [📺 The `youtube` research skill](#-the-youtube-research-skill) | 10 subcommands for search, channels, posts, shows, etc. |
+| [📜 The `transcript` skill](#-the-transcript-skill) | Free transcripts via yt-dlp |
+| [🛠 Gap-fill engine](#-when-yt-dlp-cant-do-it-we-build-it) | How we fill yt-dlp's gaps with raw scrapers |
+| [✂️ The 11 creator skills](#%EF%B8%8F-the-11-creator-skills) | Scripts, SEO, chapters, Shorts, audits, and more |
+| [📦 Install](#-install) | Quick setup for any agent harness |
+| [🤖 Have your agent set it up for you](#-have-your-agent-set-it-up-for-you) | Copy-paste prompt for any coding agent |
+| [📝 Notes & limits](#-notes--limits) | Rate limits, pagination, edge cases |
+| [📄 License](#-license) | MIT License |
+| [🙏 Credits](#-credits) | yt-dlp, upstream skill sources |
 
 ---
 
