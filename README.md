@@ -27,7 +27,11 @@
 Watch the agent in action — OpenCode fetching MKBHD's full channel breakdown (tab counts, home shelves with Featured Channels URLs, paginated community posts, and a timestamped transcript):
 
 <div align="center">
-  <iframe width="560" height="315" src="https://www.youtube.com/embed/y9U_ZeJ713M?si=eY5cQ0C07Of_2VsS" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+  <a href="https://www.youtube.com/watch?v=y9U_ZeJ713M" target="_blank">
+    <img src="https://img.youtube.com/vi/y9U_ZeJ713M/maxresdefault.jpg" alt="YouTube Skillbox Demo" width="80%">
+  </a>
+  <br>
+  <sub>Click to watch on YouTube →</sub>
 </div>
 
 ---
