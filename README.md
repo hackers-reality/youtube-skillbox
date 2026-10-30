@@ -21,7 +21,7 @@
 
 ## What is this?
 
-A drop-in set of **[SKILL.md](https://github.com/anthropics/skills) skills** for agent harnesses like **OpenCode** (works anywhere skills are discovered from a folder). Each skill in [`skills/`](skills/) is self-contained: a `SKILL.md` the agent reads, plus small Python tools it runs.
+A drop-in set of **[SKILL.md](https://github.com/anthropics/skills) skills** for AI coding agents — any harness that discovers skills from a folder. Each skill in [`skills/`](skills/) is self-contained: a `SKILL.md` the agent reads, plus small Python tools it runs.
 
 Two layers:
 
@@ -152,20 +152,20 @@ python -m pip install --user -U yt-dlp
 
 > `posts`, `home` and `shows` work even *without* yt-dlp (pure HTTP). Everything else runs through it. Run it as a module (`python -m yt_dlp`) if the exe isn't on PATH.
 
-Then, from this repo:
+Then, from this repo — point the installer at **your agent's skills directory** (where it discovers `SKILL.md` files):
 
 ```bash
-./install.sh                       # Linux / macOS → ~/.config/opencode/skills
+./install.sh "/path/to/your/agents/skills"          # Linux / macOS
 ```
 
 ```powershell
-.\install.ps1                      # Windows → %USERPROFILE%\.config\opencode\skills
+.\install.ps1 "C:\path\to\your\agents\skills"       # Windows
 ```
 
-…or by hand — copy any folder from [`skills/`](skills/) into your agent's skills directory:
+…or by hand — copy any folder from [`skills/`](skills/) there yourself:
 
 ```bash
-cp -r skills/* ~/.config/opencode/skills/
+cp -r skills/* /path/to/your/agents/skills/
 ```
 
 Restart the agent session; the skills are auto-discovered by their `description` frontmatter.
@@ -183,7 +183,8 @@ Restart the agent session; the skills are auto-discovered by their `description`
 ## 🙏 Credits
 
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — the extraction engine underneath the data layer.
-- The creator (`yt-*`) skills were distilled from community OpenCode skill collections and reworked here.
+- The 11 creator (`yt-*`) skills come from the community GitHub collection **`youtube-agent-skill`** — installed here nearly as-is (deduplicated only), not rewritten from scratch.
+- The `youtube` and `transcript` skills (scripts and docs, including every gap-fill in this README) were built and rewritten in this project.
 - This project reads publicly available YouTube data; use it responsibly and respect YouTube's Terms of Service.
 
 <p align="center">Made so nobody has to pay for a YouTube API key again 🎉</p>

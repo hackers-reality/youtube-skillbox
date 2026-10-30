@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-# Install all YouTube Skillbox skills into OpenCode's global skills directory.
+# Install all YouTube Skillbox skills into an agent's skills directory.
 set -euo pipefail
 
-DEST="${HOME}/.config/opencode/skills"
+if [ $# -lt 1 ]; then
+  echo "Usage: ./install.sh <skills-directory>"
+  echo ""
+  echo "  <skills-directory> = the folder where your AI agent discovers"
+  echo "  SKILL.md files (created automatically if missing)."
+  exit 1
+fi
+
+DEST="$1"
 SRC="$(cd "$(dirname "$0")" && pwd)/skills"
 
 mkdir -p "$DEST"
