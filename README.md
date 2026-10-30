@@ -21,7 +21,7 @@
 
 ## What is this?
 
-A drop-in set of **[SKILL.md](https://github.com/anthropics/skills) skills** for AI coding agents — any harness that discovers skills from a folder. Each skill in [`skills/`](skills/) is self-contained: a `SKILL.md` the agent reads, plus small Python tools it runs.
+A drop-in set of **[SKILL.md](https://github.com/anthropics/skills) skills** for agent harnesses like **OpenCode** (works anywhere skills are discovered from a folder). Each skill in [`skills/`](skills/) is self-contained: a `SKILL.md` the agent reads, plus small Python tools it runs.
 
 Two layers:
 
@@ -155,20 +155,44 @@ python -m pip install --user -U yt-dlp
 Then, from this repo — point the installer at **your agent's skills directory** (where it discovers `SKILL.md` files):
 
 ```bash
-./install.sh "/path/to/your/agents/skills"          # Linux / macOS
+./install.sh "/path/to/your/agents/skills"          # Linux / macOS — e.g. ~/.config/opencode/skills
 ```
 
 ```powershell
-.\install.ps1 "C:\path\to\your\agents\skills"       # Windows
+.\install.ps1 "C:\path\to\your\agents\skills"       # Windows — e.g. %USERPROFILE%\.config\opencode\skills
 ```
 
 …or by hand — copy any folder from [`skills/`](skills/) there yourself:
 
 ```bash
-cp -r skills/* /path/to/your/agents/skills/
+cp -r skills/* ~/.config/opencode/skills/            # example: OpenCode
 ```
 
 Restart the agent session; the skills are auto-discovered by their `description` frontmatter.
+
+---
+
+## 🤖 Have your agent set it up for you
+
+Don't want to install by hand? Paste this into any coding agent that can read files — **Claude Code, OpenCode, or whatever you use**:
+
+```text
+Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbox
+
+1. Get the repo: git clone https://github.com/hackers-reality/youtube-skillbox.git
+   (if you can't clone, fetch the files from the GitHub page instead)
+2. Copy every folder inside its skills/ directory into my agent's skills
+   directory (the folder where you discover SKILL.md files — for OpenCode
+   that's ~/.config/opencode/skills; if you use a different one, use yours
+   and tell me which path you chose).
+3. Make sure the data engine is installed: python -m pip install --user -U yt-dlp
+4. Smoke-test it: run
+   python <skills-dir>/youtube/scripts/ytdata.py search "rick astley" --limit 1
+   and show me the output.
+5. Then list the 13 skills you can now use (youtube, transcript, and the
+   11 yt-* ones) with one line each on when you'd use them.
+   Read each skills/*/SKILL.md for the details — don't ask me, infer from those.
+```
 
 ---
 
@@ -179,6 +203,10 @@ Restart the agent session; the skills are auto-discovered by their `description`
 - `sections` shows `N+` for community counts when more pages exist (exact when they fit on page 1).
 - Flat list view counts can show `?` occasionally — use `info` on a specific video for exact numbers.
 - Private / age-restricted / deleted targets fail with a clear message instead of silence.
+
+## 📄 License
+
+Released under the **[MIT License](LICENSE)** — free to use, modify, and redistribute.
 
 ## 🙏 Credits
 
