@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-label="YouTube Skillbox — 13 free YouTube skills for AI agents">
+  <defs>
+    <linearGradient id="redGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff4747"/>
+      <stop offset="1" stop-color="#c40000"/>
+    </linearGradient>
+    <linearGradient id="accentLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2d2d" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ff2d2d"/>
+      <stop offset="1" stop-color="#ff2d2d" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff3030" stop-opacity="0.40"/>
+      <stop offset="1" stop-color="#ff3030" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="corner" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff1f1f" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ff1f1f" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#ffffff" opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="420" fill="#0b0d12"/>
+  <rect width="1200" height="420" fill="url(#dots)"/>
+  <ellipse cx="600" cy="88" rx="340" ry="155" fill="url(#glow)"/>
+  <ellipse cx="50" cy="405" rx="310" ry="205" fill="url(#corner)"/>
+  <ellipse cx="1155" cy="25" rx="310" ry="205" fill="url(#corner)"/>
+  <rect x="0" y="0" width="1200" height="3" fill="url(#accentLine)"/>
+
+  <!-- play badge -->
+  <rect x="548" y="46" width="104" height="74" rx="20" fill="url(#redGrad)"/>
+  <polygon points="587,70 587,96 615,83" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="600" y="197" text-anchor="middle"
+        font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif"
+        font-size="62" font-weight="800" fill="#ffffff">YouTube <tspan fill="#ff5252">Skillbox</tspan></text>
+
+  <!-- subtitle -->
+  <text x="600" y="243" text-anchor="middle"
+        font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif"
+        font-size="23" font-weight="400" fill="#a7adbd">13 free skills for AI agents &#8212; research &#183; transcripts &#183; creator workflow</text>
+
+  <!-- feature chips -->
+  <g font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif"
+     font-size="16" fill="#cfd4e0" text-anchor="middle">
+    <rect x="109" y="272" width="95"  height="42" rx="21" fill="#151922" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="156" y="298">search</text>
+    <rect x="220" y="272" width="141" height="42" rx="21" fill="#151922" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="290" y="298">transcripts</text>
+    <rect x="377" y="272" width="178" height="42" rx="21" fill="#151922" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="466" y="298">community posts</text>
+    <rect x="571" y="272" width="160" height="42" rx="21" fill="#151922" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="651" y="298">home sections</text>
+    <rect x="747" y="272" width="178" height="42" rx="21" fill="#151922" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="836" y="298">scripts &amp; hooks</text>
+    <rect x="941" y="272" width="150" height="42" rx="21" fill="#151922" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="1016" y="298">titles &amp; SEO</text>
+  </g>
+
+  <!-- badges -->
+  <g font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif"
+     font-size="15" font-weight="600" text-anchor="middle">
+    <rect x="342" y="340" width="130" height="36" rx="18" fill="#191014" stroke="#ff4d4d" stroke-opacity="0.55"/>
+    <text x="407" y="363" fill="#ff9d9d">$0 forever</text>
+    <rect x="490" y="340" width="140" height="36" rx="18" fill="url(#redGrad)"/>
+    <text x="560" y="363" fill="#ffffff">no API key</text>
+    <rect x="648" y="340" width="210" height="36" rx="18" fill="#191014" stroke="#ff4d4d" stroke-opacity="0.55"/>
+    <text x="753" y="363" fill="#ff9d9d">yt-dlp + pure Python</text>
+  </g>
+</svg>
