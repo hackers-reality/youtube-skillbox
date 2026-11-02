@@ -23,18 +23,33 @@ Run it as a module (`python -m yt_dlp`) — the `yt-dlp` exe may not be on PATH.
 
 ## How to use
 
-A helper script lives at `scripts/gettranscript.py` (relative to this SKILL.md). Invoke it with `python`:
+A helper script lives at `scripts/gettranscript.py` (relative to this SKILL.md). **Run from repo root.**
 
-```bash
-python scripts/gettranscript.py "<url-or-id>"                    # clean text (default)
-python scripts/gettranscript.py "<url-or-id>" --format stamped   # [MM:SS] per line
-python scripts/gettranscript.py "<url-or-id>" --format json      # structured + metadata
-python scripts/gettranscript.py "<url-or-id>" --lang es,es-419   # language priority list
-python scripts/gettranscript.py "<url-or-id>" --all-langs        # fetch ALL available tracks
-python scripts/gettranscript.py "<url-or-id>" --no-meta          # skip metadata (faster)
+### Windows PowerShell (use `;` not `&&`):
+```powershell
+python scripts/gettranscript.py "<url-or-id>" --format json
+python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
+python scripts/gettranscript.py "<url-or-id>" --lang mr,en
 ```
 
-The script accepts a full URL, `youtu.be/ID`, `youtube.com/shorts/ID`, or a bare 11-char ID.
+### Linux/macOS (bash/zsh):
+```bash
+python scripts/gettranscript.py "<url-or-id>" --format json
+python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
+python scripts/gettranscript.py "<url-or-id>" --lang mr,en
+```
+
+### Input formats accepted:
+- Full URL: `https://www.youtube.com/watch?v=9NDb3RH9N7M`
+- Short URL: `https://youtu.be/9NDb3RH9N7M`
+- Shorts URL: `https://www.youtube.com/shorts/9NDb3RH9N7M`
+- Bare ID: `9NDb3RH9N7M`
+
+### Critical Syntax Rules:
+- **Use `--json`** for structured output (parsing text is fragile)
+- **Use `--all-langs`** to fetch ALL subtitle tracks (catches non-English originals like Marathi `mr-orig`)
+- **Windows: use `;` not `&&`** for command chaining in PowerShell
+- **Run from repo root** — script uses relative paths
 
 ## Which format to pick
 

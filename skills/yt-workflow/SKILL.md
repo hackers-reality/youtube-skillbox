@@ -11,6 +11,16 @@ Any "audit my channel" / "why isn't this growing" / "full channel review" / "ana
 ## The Pipeline (run in order, each feeds the next)
 
 ### Phase 1: Data Collection (youtube skill)
+**Windows PowerShell** (run from repo root):
+```powershell
+python ..\youtube\scripts\ytdata.py sections "@handle"
+python ..\youtube\scripts\ytdata.py channel "@handle" --limit 20 --with-duration
+python ..\youtube\scripts\ytdata.py latest "@handle" --limit 10 --with-duration
+python ..\youtube\scripts\ytdata.py home "@handle"
+python ..\youtube\scripts\ytdata.py profile "@handle"
+```
+
+**Linux/macOS (bash/zsh):**
 ```bash
 python ../youtube/scripts/ytdata.py sections "@handle"
 python ../youtube/scripts/ytdata.py channel "@handle" --limit 20 --with-duration
@@ -20,8 +30,13 @@ python ../youtube/scripts/ytdata.py profile "@handle"
 ```
 
 ### Phase 2: Content Extraction (transcript skill)
+**Windows PowerShell:**
+```powershell
+python ..\transcript\scripts\gettranscript.py "<video_id>" --format json --all-langs
+```
+
+**Linux/macOS:**
 ```bash
-# For each of the 3 most recent videos — USE --all-langs to catch non-English originals:
 python ../transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs
 ```
 
@@ -73,6 +88,22 @@ python ../yt-retention/scripts/retention.py retention.csv
 3. **Fail fast** — if a phase fails, report what's missing and stop
 4. **Cache intermediates** — save JSON to temp files, pass paths forward
 5. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the audit output and continue. Don't halt the pipeline.
+
+---
+
+## ⚠️ Common Agent Errors (Avoid These)
+
+| Error | Wrong | Correct |
+|-------|-------|---------|
+| Using TypeScript API | `await tools.youtube.channel(...)` | Use Python scripts: `python scripts/ytdata.py channel "@handle"` |
+| PowerShell `&&` | `cd dir && python ...` | Use `;` or separate lines: `cd dir; python ...` |
+| Bare UC ID | `python scripts/ytdata.py channel UC7YGYCm...` | Use `@handle`: `python scripts/ytdata.py channel "@handle"` |
+| Missing subcommand | `python scripts/ytdata.py @handle` | Use subcommand: `python scripts/ytdata.py profile "@handle"` |
+| Missing `--json` | Parsing text output | Always use `--json` for structured output |
+| Missing `--all-langs` | `python ... gettranscript.py "id" --format json` | Use `--all-langs`: `python ... gettranscript.py "id" --format json --all-langs` |
+| Missing `--json` on transcript | `python ... gettranscript.py "id"` | Use `--format json`: `python ... gettranscript.py "id" --format json --all-langs` |
+
+---
 
 ---
 

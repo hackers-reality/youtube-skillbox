@@ -17,21 +17,44 @@ Search, browse, and analyze YouTube via local `yt-dlp` — **free, no API key, n
 
 ## How to use
 
-Helper script at `scripts/ytdata.py` (relative to this SKILL.md). Subcommands:
+Helper script at `scripts/ytdata.py` (relative to this SKILL.md). **Run from repo root.**
 
-```bash
-python scripts/ytdata.py search "query" --limit 10          # find videos on a topic
-python scripts/ytdata.py profile "@handle"                  # channel About/profile section
-python scripts/ytdata.py sections "@handle"                 # count every tab: videos/shorts/shows/playlists/posts
-python scripts/ytdata.py home "@handle"                     # Home tab shelves (featured video, Featured Channels)
-python scripts/ytdata.py channel "@handle" --limit 15       # a channel's uploads
-python scripts/ytdata.py channel "@handle" --tab shorts     # or: videos (default) | shorts | streams
-python scripts/ytdata.py latest "@handle" --limit 10        # most recent uploads
-python scripts/ytdata.py posts "@handle" --limit 30         # community posts — paginates past page 1
-python scripts/ytdata.py shows "@handle"                    # Shows tab (episode collections, like playlists)
+### Windows PowerShell (use `;` not `&&`):
+```powershell
+python scripts/ytdata.py search "query" --limit 10
+python scripts/ytdata.py profile "@handle"
+python scripts/ytdata.py sections "@handle"
+python scripts/ytdata.py home "@handle"
+python scripts/ytdata.py channel "@handle" --limit 15
+python scripts/ytdata.py channel "@handle" --tab shorts
+python scripts/ytdata.py latest "@handle" --limit 10
+python scripts/ytdata.py posts "@handle" --limit 30
+python scripts/ytdata.py shows "@handle"
 python scripts/ytdata.py playlist "<playlist-url>" --limit 20
-python scripts/ytdata.py info "<video-url-or-id>"           # full stats for one video
+python scripts/ytdata.py info "<video-url-or-id>"
 ```
+
+### Linux/macOS (bash/zsh):
+```bash
+python scripts/ytdata.py search "query" --limit 10
+python scripts/ytdata.py profile "@handle"
+python scripts/ytdata.py sections "@handle"
+python scripts/ytdata.py home "@handle"
+python scripts/ytdata.py channel "@handle" --limit 15
+python scripts/ytdata.py channel "@handle" --tab shorts
+python scripts/ytdata.py latest "@handle" --limit 10
+python scripts/ytdata.py posts "@handle" --limit 30
+python scripts/ytdata.py shows "@handle"
+python scripts/ytdata.py playlist "<playlist-url>" --limit 20
+python scripts/ytdata.py info "<video-url-or-id>"
+```
+
+### Critical Syntax Rules:
+- **Always use `@handle` format** (e.g., `@Moments_Unscriptedorignal`) — NOT bare UC ID
+- **Use `--json` flag** for structured output (parsing text output is fragile)
+- **Run from repo root** — scripts use relative paths
+- **Windows: use `;` not `&&`** for command chaining in PowerShell
+- **Subcommand required** — e.g., `channel`, `profile`, `search` — not bare ID
 
 Add `--json` to any command for structured output (use when you need to post-process). Default is readable text. `home --verbose` also lists each shelf's individual videos/channels.
 
