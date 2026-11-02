@@ -21,6 +21,29 @@ For a video aimed at the subscriber feed, say so and spend the effort on `/yt-pa
 2. Never invent a number, a result or a source. If a figure would strengthen it and you do not have
    one, ask for it or write the line without it.
 
+## Pick the query first
+
+Research the keyword before writing a word of the copy — not after.
+
+```bash
+python skills/youtube/scripts/ytdata.py keywords "seed idea" --patterns
+```
+
+That expands the seed through YouTube's own suggest box (a–z, plus `how` / `why` / `best` /
+`for beginners` / `vs` / year patterns) and scores every idea by how often and how high it comes
+back. That is relative demand, free, no API key. `Y` = it mentions the current year (trending),
+`Q` = it is a question. Use `--gl` / `--hl` when the video targets a specific market.
+
+Take the top two or three the video can honestly deliver. The highest-scoring keyword you cannot
+answer is a bounce, not traffic. Then check where you already stand:
+
+```bash
+python skills/youtube/scripts/ytdata.py track "the keyword" --video <your video url>
+```
+
+The position is logged with its history (`~/.ytdata-ranklog.json`), so a later run shows movement
+instead of a one-off guess. Re-check after publishing, then again a week later.
+
 ## The description
 
 - **The first two lines are the only ones anyone reads.** They show above "...more" and they are
@@ -37,9 +60,9 @@ a strategy and stuffing unrelated ones is against the terms.
 
 ## The query test
 
-Before handing anything over, write the three search queries this video should win, and check the
-title and first two description lines contain the words in those queries. If they do not, the
-problem is the title, not the description.
+Before handing anything over, write the three search queries this video should win — pull them from
+`keywords`, not from your head — and check the title and first two description lines contain the
+words in those queries. If they do not, the problem is the title, not the description.
 
 ## The gate
 

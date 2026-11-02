@@ -42,7 +42,7 @@ Watch the agent in action — one prompt, *"why isn't this channel growing?"* Op
 |---------|-------------|
 | [📺 Demo](#-demo) | Video walkthrough of the agent using the skills |
 | [What is this?](#what-is-this) | Overview of the two-layer architecture |
-| [📺 The `youtube` research skill](#-the-youtube-research-skill) | 10 subcommands for search, channels, posts, shows, etc. |
+| [📺 The `youtube` research skill](#-the-youtube-research-skill) | 12 subcommands — search, keywords, rank tracking, channels, posts, shows |
 | [📜 The `transcript` skill](#-the-transcript-skill) | Free transcripts via yt-dlp |
 | [🛠 Gap-fill engine](#-when-yt-dlp-cant-do-it-we-build-it) | How we fill yt-dlp's gaps with raw scrapers |
 | [✂️ The 11 creator skills](#%EF%B8%8F-the-11-creator-skills) | Scripts, SEO, chapters, Shorts, audits, and more |
@@ -72,10 +72,12 @@ Everything is free. There is **no paid tier, no API key, and no account** anywhe
 
 ## 📺 The `youtube` research skill
 
-Ten subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
+Twelve subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
 
 ```bash
 python scripts/ytdata.py search "query" --limit 10     # find videos on a topic
+python scripts/ytdata.py keywords "seed idea" --patterns  # keyword ideas, scored by demand
+python scripts/ytdata.py track "keyword" --video <url> # where your video ranks (+ history)
 python scripts/ytdata.py profile "@handle"             # About: subs, description, keywords
 python scripts/ytdata.py sections "@handle"            # count EVERY tab at once
 python scripts/ytdata.py home "@handle"                # home shelves + Featured Channels
@@ -86,6 +88,9 @@ python scripts/ytdata.py shows "@handle"               # Shows tab (episode coll
 python scripts/ytdata.py playlist "<playlist-url>"
 python scripts/ytdata.py info "<video-url-or-id>"      # views, likes, tags, date
 ```
+
+`search`, `keywords` and `track` take `--gl` / `--hl` (default `US` / `en`) to pin a
+region and language, so a rank position means the same thing on every machine.
 
 Add `--json` to any command for structured output. Example:
 
@@ -102,7 +107,9 @@ Channel: https://www.youtube.com/@MrBeast
 
 | Command | Returns |
 | ------- | ------- |
-| `search` | Videos matching a query — title, duration, views, channel, URL |
+| `search` | Videos matching a query — title, duration, views, channel, URL (`--gl` / `--hl` locale) |
+| `keywords` | Keyword ideas from YouTube's suggest box — a–z + pattern expansion, scored by relative demand, `Y` = trending this year |
+| `track` | Where a video ranks for a keyword — with ↑↓ history across runs, kept per locale |
 | `profile` | Channel About section — name, handle, subs, description, **all** keywords |
 | `sections` | One-call counts of every tab: videos / shorts / streams / shows / playlists / posts |
 | `home` | Home-tab shelves — featured video, Shorts, playlists, posts, **Featured Channels** (names + URLs) |
@@ -132,7 +139,7 @@ Prefers human captions, falls back to auto-generated. The JSON form carries `sta
 
 ## 🛠 When yt-dlp can't do it, we build it
 
-`yt-dlp` is the data engine for search, channels, playlists, metadata and transcripts — but it explicitly refuses a few things (returns `0 entries` or `"no home tab"`). Rather than pay an API, each gap is filled with **a small pure-Python scraper** (`urllib` + JSON parsing of YouTube's own page data / Innertube endpoints):
+`yt-dlp` is the data engine for channels, playlists, metadata and transcripts — but it explicitly refuses a few things (returns `0 entries`, says `"no home tab"`, or quietly localizes results to your own IP). Rather than pay an API, each gap is filled with **a small pure-Python scraper** (`urllib` + JSON parsing of YouTube's own page data / Innertube endpoints):
 
 | Gap | What yt-dlp does | Our fill |
 | --- | ---------------- | -------- |
@@ -141,6 +148,7 @@ Prefers human captions, falls back to auto-generated. The JSON form carries `sta
 | **Home sections** | `"This channel does not have a home tab"` | Home-tab shelf parser: featured video, Shorts, playlists, posts, and **Featured Channels** with URLs |
 | **Shows tab** | `0 entries` (can't parse `gridShowRenderer`) | Direct renderer parser → title, episode count, show URL |
 | **Tab counts** | one tab per invocation | `sections` probes every tab and merges yt-dlp + raw results |
+| **Locale-pinned search** | search follows your IP — `gl` is silently set to whatever country you're in, and no flag exists to change it | Raw Innertube `search` POSTs with `client.gl` / `client.hl` pinned explicitly: same rank in New York and New Delhi |
 
 All of it is dependency-free Python — no API key, no credits, no tokens to manage.
 
@@ -186,7 +194,7 @@ They pair naturally with the data layer: `youtube` finds the videos → `transcr
 python -m pip install --user -U yt-dlp
 ```
 
-> `posts`, `home` and `shows` work even *without* yt-dlp (pure HTTP). Everything else runs through it. Run it as a module (`python -m yt_dlp`) if the exe isn't on PATH.
+> `posts`, `home`, `shows`, `search`, `keywords` and `track` work even *without* yt-dlp (pure HTTP). Everything else runs through it. Run it as a module (`python -m yt_dlp`) if the exe isn't on PATH.
 
 Then, from this repo — point the installer at **your agent's skills directory** (where it discovers `SKILL.md` files):
 

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
 YouTube research via yt-dlp + raw page scraping: search, channels, playlists,
-metadata, community posts (paginated), home sections, shows. No API key, no credits.
+metadata, community posts (paginated), home sections, shows, keyword research
+and rank tracking. No API key, no credits.
 
 Subcommands:
   search   <query>              Search YouTube videos.
+  keywords <seed>               Keyword ideas + relative demand (YouTube suggest).
+  track    <query> --video URL  Rank position for a keyword, with ↑↓ history.
   profile  <handle-or-url>      Channel About/profile section.
   sections <handle-or-url>      Count every tab (videos/shorts/shows/playlists/posts).
   channel  <handle-or-url>      List a channel's uploads.
@@ -19,14 +22,18 @@ Common flags:
   --limit N        Max results (default 10; max ~50 per call for search).
   --json           Emit structured JSON instead of readable text.
   --tab            channel only: videos (default) | shorts | streams
+  --gl XX --hl YY  search/keywords/track: pin region + language (default US / en).
 
-Requires: pip install yt-dlp  (posts/home/shows use raw HTTP and work without it)
+Requires: pip install yt-dlp  (posts/home/shows/search/keywords/track work without it)
 """
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import time
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -94,6 +101,141 @@ def _innertube_browse(token, api_key, context):
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode("utf-8", "replace"))
+
+
+# ---- Locale-aware search via raw Innertube (gap-fill: yt-dlp has no region flag) ----
+# yt-dlp localizes every search to whatever country the request comes from —
+# its context ships gl=<your IP's country> and there is no flag to override it
+# (no `gl`/`region` extractor-arg exists). A rank position that depends on where
+# you're sitting isn't a rank position, so we call the endpoint ourselves and
+# pin client.gl / client.hl. Also means search works with no yt-dlp installed.
+
+_YT_SEARCH_PARAMS = "EgIQAfABAQ=="  # videos-only filter (the same param yt-dlp sends)
+_cfg_cache = {}
+
+
+def _innertube_cfg():
+    """Read INNERTUBE_API_KEY + INNERTUBE_CONTEXT off the homepage (cached per run)."""
+    if not _cfg_cache:
+        key, ctx = _extract_ytcfg(_http_get("https://www.youtube.com/"))
+        if not key or not ctx:
+            raise RuntimeError("could not read YouTube's innertube config")
+        _cfg_cache["key"], _cfg_cache["context"] = key, ctx
+    return _cfg_cache["key"], _cfg_cache["context"]
+
+
+def _innertube_post(endpoint, payload):
+    key, _ = _innertube_cfg()
+    url = f"https://www.youtube.com/youtubei/v1/{endpoint}?key={key}"
+    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+                                 headers=dict(_UA, **{"Content-Type": "application/json"}),
+                                 method="POST")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode("utf-8", "replace"))
+
+
+def _parse_count(txt):
+    """'1,234,567 views' / '1.2M views' / 'No views' → int (None if absent)."""
+    if not txt:
+        return None
+    if re.search(r"no\s+views", txt, re.I):
+        return 0
+    m = re.search(r"(\d[\d,\.\s]*?)\s*([KMB])?(?:\s|$)", txt, re.I)
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    if raw.count(".") > 1 or raw.count(",") > 1:   # grouping, not a decimal: 1.234.567
+        raw = re.sub(r"[.,\s]", "", raw)
+    else:
+        raw = raw.replace(",", "").replace(" ", "")
+    try:
+        num = float(raw)
+    except ValueError:
+        return None
+    return int(num * {"K": 1e3, "M": 1e6, "B": 1e9}.get((m.group(2) or "").upper(), 1))
+
+
+def _parse_clock(txt):
+    """'1:02:03' → 3723 seconds (None if absent or not a clock)."""
+    if not txt:
+        return None
+    parts = txt.strip().split(":")
+    if not parts or not all(p.isdigit() for p in parts):
+        return None
+    sec = 0
+    for p in parts:
+        sec = sec * 60 + int(p)
+    return sec
+
+
+def _parse_video(v):
+    """videoRenderer → the same shape `slim()` expects from a flat yt-dlp entry."""
+    vid = v.get("videoId")
+    if not vid:
+        return None
+    owner = v.get("ownerText") or v.get("longBylineText") or v.get("shortBylineText") or {}
+    runs = owner.get("runs") or []
+    chan_url = None
+    if runs:
+        browse = (runs[0].get("navigationEndpoint") or {}).get("browseEndpoint") or {}
+        if browse.get("browseId"):
+            chan_url = f"https://www.youtube.com/channel/{browse['browseId']}"
+    verified = any("VERIFIED" in ((b.get("metadataBadgeRenderer") or {}).get("badgeStyleType") or "")
+                   for b in v.get("badges") or [])
+    length = _runs_text(v.get("lengthText"))
+    return {
+        "id": vid,
+        "title": _runs_text(v.get("title")),
+        "url": f"https://www.youtube.com/watch?v={vid}",
+        "duration": _parse_clock(length),
+        "duration_string": length or None,
+        "view_count": _parse_count(_runs_text(v.get("viewCountText"))),
+        "channel": runs[0].get("text") if runs else None,
+        "channel_url": chan_url,
+        "channel_is_verified": verified or None,
+        "upload_date": None,
+        "live_status": None,
+    }
+
+
+def _innertube_search(query, limit, gl="US", hl="en", params=None):
+    """Search YouTube at an explicit locale, paginating via continuation tokens.
+
+    Raises on a hard failure (no config / endpoint down) so callers can fall
+    back to yt-dlp; returns [] only when YouTube genuinely has nothing.
+    """
+    key, base_ctx = _innertube_cfg()
+    ctx = json.loads(json.dumps(base_ctx))        # copy — never mutate the cache
+    ctx.setdefault("client", {})["gl"] = gl
+    ctx["client"]["hl"] = hl
+
+    out, token, seen_tokens, seen_ids = [], None, set(), set()
+    while len(out) < limit:
+        payload = {"context": ctx}
+        if token:
+            payload["continuation"] = token
+        else:
+            payload["query"] = query
+            if params:
+                payload["params"] = params
+        try:
+            data = _innertube_post("search", payload)
+        except Exception as e:
+            if not out:
+                raise
+            print(f"WARNING: search page failed ({e}); keeping {len(out)} results",
+                  file=sys.stderr)
+            break
+        for v in _find_renderers(data, "videoRenderer"):
+            item = _parse_video(v)
+            if item and item["id"] not in seen_ids:
+                seen_ids.add(item["id"])
+                out.append(item)
+        token = _first_continuation(data)
+        if not token or token in seen_tokens:
+            break
+        seen_tokens.add(token)
+    return out[:limit]
 
 
 def _first_continuation(obj, path=""):
@@ -380,8 +522,16 @@ def print_list(items, as_json):
 
 def cmd_search(a):
     q = a.query.replace(":", " ").strip()
-    args = [f"ytsearch{a.limit}:{q}"]
-    entries = dump_entries(args)
+    entries = []
+    try:
+        entries = _innertube_search(q, a.limit, gl=a.gl, hl=a.hl, params=_YT_SEARCH_PARAMS)
+    except Exception as e:
+        print(f"WARNING: locale search failed ({e})", file=sys.stderr)
+    if not entries:
+        # yt-dlp can't pin a locale, but it's better than no results at all
+        print(f"WARNING: falling back to yt-dlp — results will follow your IP, "
+              f"not gl={a.gl}", file=sys.stderr)
+        entries = dump_entries([f"ytsearch{a.limit}:{q}"])
     print_list([slim(e) for e in entries[: a.limit]], a.json)
 
 
@@ -743,6 +893,174 @@ def cmd_info(a):
             print(f"{k:>18}: {v}")
 
 
+# ---- Keyword research via YouTube suggest (free, no API key) ----
+# The suggest box runs on real query popularity — the same signal free SEO
+# tools approximate volume with. We expand a seed through the alphabet and
+# score how often/where each suggestion comes back.
+
+_SUGGEST_URL = "https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&q="
+
+
+def _suggest(q, gl="US", hl="en", timeout=8):
+    """One YouTube suggest lookup. Returns a list of suggestion strings (empty on any failure)."""
+    url = f"{_SUGGEST_URL}{urllib.parse.quote(q)}&gl={gl}&hl={hl}"
+    req = urllib.request.Request(url, headers=_UA)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            text = r.read().decode("utf-8", "replace")
+    except Exception:
+        return []
+    m = re.search(r"\((\[.*\])\)", text, re.S)
+    if not m:
+        return []
+    try:
+        payload = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return []
+    out = []
+    for item in payload[1]:
+        if isinstance(item, list) and item and isinstance(item[0], str):
+            out.append(item[0])
+    return out
+
+
+def cmd_keywords(a):
+    seed = a.seed.strip()
+    year = time.strftime("%Y")
+    queries = [seed]
+    if a.letters:
+        queries += [f"{seed} {c}" for c in a.letters]
+    if a.patterns:
+        queries += [f"how to {seed}", f"why {seed}", f"best {seed}",
+                    f"{seed} for beginners", f"{seed} vs", f"{seed} {year}"]
+
+    stats = {}
+    for i, q in enumerate(queries):
+        for pos, s in enumerate(_suggest(q, gl=a.gl, hl=a.hl)):
+            key = s.lower().strip()
+            rec = stats.get(key)
+            if rec is None:
+                stats[key] = {"keyword": s, "hits": 1, "best_pos": pos}
+            else:
+                rec["hits"] += 1
+                rec["best_pos"] = min(rec["best_pos"], pos)
+        if i < len(queries) - 1:
+            time.sleep(0.15)  # be polite; YouTube/Google throttle hard otherwise
+
+    stats.pop(seed.lower(), None)  # the seed trivially suggests itself
+    if not stats:
+        print("ERROR: suggest returned nothing (rate-limited?) — retry in a bit or fewer queries",
+              file=sys.stderr)
+        sys.exit(1)
+
+    question_words = ("how", "why", "what", "when", "where", "is", "are", "can", "do", "does", "should")
+    rows = []
+    for rec in stats.values():
+        kw = rec["keyword"]
+        score = rec["hits"] * 10 + max(0, 25 - rec["best_pos"])
+        rec["year_trend"] = year in kw
+        rec["question"] = kw.lower().split()[0] in question_words
+        if rec["year_trend"]:
+            score += 12
+        if rec["question"]:
+            score += 5
+        rec["score"] = score
+        rows.append(rec)
+    rows.sort(key=lambda r: (-r["score"], r["keyword"]))
+    rows = rows[: a.limit]
+
+    if a.json:
+        print(json.dumps({"seed": seed, "gl": a.gl, "hl": a.hl, "queries": len(queries),
+                          "unique": len(stats), "keywords": rows},
+                         ensure_ascii=False, indent=2))
+        return
+    print(f'Keyword ideas for "{seed}" — {len(stats)} unique from {len(queries)} queries '
+          f'(gl={a.gl} hl={a.hl})')
+    print("(score = how often + how high it comes back in suggest; "
+          f"Y = mentions {year} (trending now), Q = question form)\n")
+    print(f"{'score':>5}  {'hits':>4}  {'pos':>3}  keyword")
+    for r in rows:
+        flags = ("  Y" if r["year_trend"] else "") + ("  Q" if r["question"] else "")
+        print(f"{r['score']:>5}  {r['hits']:>4}  #{r['best_pos']:<3} {r['keyword']}{flags}")
+
+
+# ---- Rank tracking: where a video sits for a keyword (no API key) ----
+
+def _video_id(url_or_id):
+    m = re.search(r"(?:[?&]v=|/shorts/|/embed/|/live/)([\w-]{11})", url_or_id)
+    if m:
+        return m.group(1)
+    if re.fullmatch(r"[\w-]{11}", url_or_id):
+        return url_or_id
+    return None
+
+
+def cmd_track(a):
+    q = a.query.replace(":", " ").strip()
+    entries = []
+    try:
+        entries = _innertube_search(q, a.top, gl=a.gl, hl=a.hl, params=_YT_SEARCH_PARAMS)
+    except Exception as e:
+        print(f"WARNING: locale search failed ({e})", file=sys.stderr)
+    if not entries:
+        print(f"WARNING: falling back to yt-dlp — results will follow your IP, "
+              f"not gl={a.gl}", file=sys.stderr)
+        entries = dump_entries([f"ytsearch{a.top}:{q}"])
+    if not a.video:
+        # no target video: just show what currently ranks (SERP view)
+        if not a.json:
+            print(f'Top {min(len(entries), a.top)} for "{q}"  (gl={a.gl} hl={a.hl})\n')
+        print_list([slim(e) for e in entries[: a.top]], a.json)
+        return
+
+    vid = _video_id(a.video)
+    if not vid:
+        print("ERROR: cannot parse video URL or ID", file=sys.stderr)
+        sys.exit(1)
+    rank = next((i + 1 for i, e in enumerate(entries) if e.get("id") == vid), None)
+
+    log_path = os.path.expanduser(a.log)
+    try:
+        with open(log_path, encoding="utf-8") as f:
+            log = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        log = []
+    # history is per-locale: a #3 in the US and a #3 in India are not the same #3
+    history = [r for r in log
+               if r.get("keyword") == q and r.get("video") == vid
+               and r.get("gl", "US") == a.gl and r.get("hl", "en") == a.hl]
+    prev = history[-1]["rank"] if history else None
+    log.append({"keyword": q, "video": vid, "rank": rank, "gl": a.gl, "hl": a.hl,
+                "checked_at": time.strftime("%Y-%m-%d %H:%M")})
+    parent = os.path.dirname(log_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+
+    if a.json:
+        print(json.dumps({"keyword": q, "video": vid, "rank": rank, "gl": a.gl, "hl": a.hl,
+                          "previous": prev, "history": history + log[-1:]},
+                         ensure_ascii=False, indent=2))
+        return
+
+    pos = f"#{rank}" if rank else f"not in top {a.top}"
+    print(f'"{q}" → {pos}   (gl={a.gl} hl={a.hl})')
+    if prev is None:
+        print("first check — future runs will show movement")
+    elif rank is None or prev is None:
+        print(f"previous: #{prev if prev else 'not in top ' + str(a.top)}  (→ no comparison)")
+    else:
+        diff = prev - rank  # positive = moved up the ranks
+        mark = "↑" if diff > 0 else ("↓" if diff < 0 else "→")
+        print(f"previous: #{prev}  ({mark}{abs(diff)})")
+    if history:
+        print("\nhistory:")
+        for r in history:
+            shown = f"#{r['rank']}" if r["rank"] else f">{a.top}"
+            print(f"  {r['checked_at']}  {shown}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="YouTube research via yt-dlp (no API key).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -750,6 +1068,8 @@ def main():
     p = sub.add_parser("search", help="Search videos")
     p.add_argument("query")
     p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--gl", default="US", help="region to rank in (US, IN, GB, JP, …)")
+    p.add_argument("--hl", default="en", help="interface language (en, hi, ja, …)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_search)
 
@@ -805,6 +1125,28 @@ def main():
     p.add_argument("info", help="Video URL or ID")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_info)
+
+    p = sub.add_parser("keywords", help="Keyword ideas + relative volume from YouTube suggest (no API key)")
+    p.add_argument("seed", help="Seed keyword, e.g. \"thumbnail ideas\"")
+    p.add_argument("--letters", default="abcdefghijklmnopqrstuvwxyz",
+                   help="alphabet-soup suffixes to expand with ('' to disable)")
+    p.add_argument("--patterns", action="store_true",
+                   help="also try how/why/best/for-beginners/vs/year patterns")
+    p.add_argument("--limit", type=int, default=25)
+    p.add_argument("--gl", default="US", help="region for suggestions (US, IN, GB, …)")
+    p.add_argument("--hl", default="en", help="suggestion language (en, hi, ja, …)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_keywords)
+
+    p = sub.add_parser("track", help="Rank tracking — where a video sits for a keyword")
+    p.add_argument("query", help="keyword to search")
+    p.add_argument("--video", help="your video URL/ID to track (omit: show current top results)")
+    p.add_argument("--top", type=int, default=20, help="how many results to search")
+    p.add_argument("--gl", default="US", help="region to rank in (US, IN, GB, JP, …)")
+    p.add_argument("--hl", default="en", help="interface language (en, hi, ja, …)")
+    p.add_argument("--log", default="~/.ytdata-ranklog.json", help="rank history file")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_track)
 
     a = ap.parse_args()
     a.func(a)
