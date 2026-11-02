@@ -156,6 +156,11 @@ Prefers human captions, falls back to auto-generated. The JSON form carries `sta
 | **Shows tab** | `0 entries` (can't parse `gridShowRenderer`) | Direct renderer parser → title, episode count, show URL |
 | **Tab counts** | one tab per invocation | `sections` probes every tab and merges yt-dlp + raw results |
 | **Locale-pinned search** | search follows your IP — `gl` is silently set to whatever country you're in, and no flag exists to change it | Raw Innertube `search` POSTs with `client.gl` / `client.hl` pinned explicitly: same rank in New York and New Delhi. Works for `search`, `keywords`, `track`, `compete`, `trends`. |
+| **Keyword competition score** | not available | Live SERP analysis: median views (log), verified %, title match density, median age, **velocity (views/day)** → 0–100 score + band (EASY/MEDIUM/HARD/SATURATED) + actionable advice |
+| **Historical keyword trends** | not available | `keywords` auto-logs score snapshots to `~/.ytdata-trendlog.json`; `trends` shows sparklines, velocity (↑/↓/→), Δ over time |
+| **Video SEO scorecard** | not available | `scorecard` audits title/desc/tags/chapters/freshness vs target keyword → 0–100 with weighted checks & fixes |
+| **Channel outliers** | not available | `outliers` finds videos where views/subs ratio exceeds threshold — breakout content regardless of channel size |
+| **Content gap analysis** | not available | `gap` compares your seed keywords vs competitor's profile keywords → unique/shared opportunities |
 
 All of it is dependency-free Python — no API key, no credits, no tokens to manage.
 
