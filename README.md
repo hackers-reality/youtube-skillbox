@@ -76,7 +76,7 @@ Twelve subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
 
 ```bash
 python scripts/ytdata.py search "query" --limit 10     # find videos on a topic
-python scripts/ytdata.py keywords "seed idea" --patterns  # keyword ideas, scored by demand
+python scripts/ytdata.py keywords "seed idea" --patterns  # keyword ideas (2 engines), scored
 python scripts/ytdata.py track "keyword" --video <url> # where your video ranks (+ history)
 python scripts/ytdata.py profile "@handle"             # About: subs, description, keywords
 python scripts/ytdata.py sections "@handle"            # count EVERY tab at once
@@ -91,6 +91,8 @@ python scripts/ytdata.py info "<video-url-or-id>"      # views, likes, tags, dat
 
 `search`, `keywords` and `track` take `--gl` / `--hl` (default `US` / `en`) to pin a
 region and language, so a rank position means the same thing on every machine.
+`keywords` merges two engines by default — YouTube's suggest plus DuckDuckGo's
+(`--sources yt` or `--sources ddg` to use one).
 
 Add `--json` to any command for structured output. Example:
 
@@ -108,7 +110,7 @@ Channel: https://www.youtube.com/@MrBeast
 | Command | Returns |
 | ------- | ------- |
 | `search` | Videos matching a query — title, duration, views, channel, URL (`--gl` / `--hl` locale) |
-| `keywords` | Keyword ideas from YouTube's suggest box — a–z + pattern expansion, scored by relative demand, `Y` = trending this year |
+| `keywords` | Keyword ideas from **YouTube suggest + DuckDuckGo** — a–z + pattern expansion, scored by cross-engine demand, `Y` = trending this year |
 | `track` | Where a video ranks for a keyword — with ↑↓ history across runs, kept per locale |
 | `profile` | Channel About section — name, handle, subs, description, **all** keywords |
 | `sections` | One-call counts of every tab: videos / shorts / streams / shows / playlists / posts |

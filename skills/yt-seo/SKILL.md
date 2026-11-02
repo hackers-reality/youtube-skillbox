@@ -29,10 +29,12 @@ Research the keyword before writing a word of the copy — not after.
 python skills/youtube/scripts/ytdata.py keywords "seed idea" --patterns
 ```
 
-That expands the seed through YouTube's own suggest box (a–z, plus `how` / `why` / `best` /
-`for beginners` / `vs` / year patterns) and scores every idea by how often and how high it comes
-back. That is relative demand, free, no API key. `Y` = it mentions the current year (trending),
-`Q` = it is a question. Use `--gl` / `--hl` when the video targets a specific market.
+That expands the seed through **two** suggest engines — YouTube's own (what people type *on*
+YouTube) and DuckDuckGo's (what the wider web asks) — across a–z plus `how` / `why` / `best` /
+`for beginners` / `vs` / year patterns, then scores every idea by how often and how high it comes
+back. Both are free, no API key; `--sources yt` restricts to YouTube alone. `Y` = it mentions the
+current year (trending), `Q` = it is a question. Use `--gl` / `--hl` when the video targets a
+specific market.
 
 Take the top two or three the video can honestly deliver. The highest-scoring keyword you cannot
 answer is a bounce, not traffic. Then check where you already stand:

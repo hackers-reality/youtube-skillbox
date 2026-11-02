@@ -6,7 +6,7 @@ and rank tracking. No API key, no credits.
 
 Subcommands:
   search   <query>              Search YouTube videos.
-  keywords <seed>               Keyword ideas + relative demand (YouTube suggest).
+  keywords <seed>               Keyword ideas + relative demand (YouTube + DDG suggest).
   track    <query> --video URL  Rank position for a keyword, with ↑↓ history.
   profile  <handle-or-url>      Channel About/profile section.
   sections <handle-or-url>      Count every tab (videos/shorts/shows/playlists/posts).
@@ -23,6 +23,7 @@ Common flags:
   --json           Emit structured JSON instead of readable text.
   --tab            channel only: videos (default) | shorts | streams
   --gl XX --hl YY  search/keywords/track: pin region + language (default US / en).
+  --sources        keywords only: engines to merge (default yt,ddg).
 
 Requires: pip install yt-dlp  (posts/home/shows/search/keywords/track work without it)
 """
@@ -924,6 +925,54 @@ def _suggest(q, gl="US", hl="en", timeout=8):
     return out
 
 
+# DuckDuckGo autocomplete — the second opinion. YouTube's suggest tells you what
+# people type ON YouTube; DDG tells you what the wider web asks about. Agreement
+# across both is a stronger demand signal than either alone, and DDG doubles as
+# the safety net when Google's endpoint throttles.
+
+# DDG's kl codes don't map 1:1 from gl/hl (GB is 'uk', not 'gb'; India ships
+# 'in-en' and has no 'in-hi'). Unknown codes fail silently DDG-side, so a miss
+# here only costs the locale hint — never the request itself.
+_DDG_KL = {
+    ("US", "en"): "us-en", ("GB", "en"): "uk-en", ("CA", "en"): "ca-en",
+    ("AU", "en"): "au-en", ("NZ", "en"): "nz-en", ("IE", "en"): "ie-en",
+    ("IN", "en"): "in-en", ("IN", "hi"): "in-en", ("ZA", "en"): "za-en",
+    ("DE", "de"): "de-de", ("AT", "de"): "at-de", ("CH", "de"): "ch-de",
+    ("FR", "fr"): "fr-fr", ("ES", "es"): "es-es", ("MX", "es"): "mx-es",
+    ("IT", "it"): "it-it", ("NL", "nl"): "nl-nl", ("PT", "pt"): "pt-pt",
+    ("BR", "pt"): "br-pt", ("JP", "ja"): "jp-jp", ("KR", "ko"): "kr-kr",
+    ("RU", "ru"): "ru-ru", ("PL", "pl"): "pl-pl", ("TR", "tr"): "tr-tr",
+    ("SE", "sv"): "sv-se", ("NO", "no"): "no-no", ("DK", "da"): "dk-dk",
+    ("FI", "fi"): "fi-fi", ("CZ", "cs"): "cz-cz", ("ID", "id"): "id-id",
+    ("TH", "th"): "th-th", ("SA", "ar"): "sa-ar", ("AE", "ar"): "ae-ar",
+    ("IL", "he"): "il-he",
+}
+
+
+def _ddg_kl(gl, hl):
+    """Map --gl/--hl to a DuckDuckGo kl code, or None to take DDG's own default."""
+    gl, hl = (gl or "").upper(), (hl or "").lower()
+    return _DDG_KL.get((gl, hl)) or _DDG_KL.get((gl, "en"))
+
+
+def _suggest_ddg(q, kl=None, timeout=8):
+    """One DuckDuckGo autocomplete lookup (list form). Empty list on any failure."""
+    url = f"https://duckduckgo.com/ac/?q={urllib.parse.quote(q)}&type=list"
+    if kl:
+        url += f"&kl={kl}"
+    req = urllib.request.Request(url, headers=_UA)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:
+        return []
+    if isinstance(data, list) and len(data) > 1 and isinstance(data[1], list):
+        return [s for s in data[1] if isinstance(s, str)]
+    if isinstance(data, list):   # bare form: [{"phrase": "..."}, ...]
+        return [d.get("phrase") for d in data if isinstance(d, dict) and d.get("phrase")]
+    return []
+
+
 def cmd_keywords(a):
     seed = a.seed.strip()
     year = time.strftime("%Y")
@@ -934,18 +983,36 @@ def cmd_keywords(a):
         queries += [f"how to {seed}", f"why {seed}", f"best {seed}",
                     f"{seed} for beginners", f"{seed} vs", f"{seed} {year}"]
 
+    use = {s.strip().lower() for s in a.sources.split(",") if s.strip()}
+    unknown = use - {"yt", "ddg"}
+    if not use or unknown:
+        print(f"ERROR: --sources takes a comma list from yt,ddg (got {a.sources!r})",
+              file=sys.stderr)
+        sys.exit(1)
+    kl = _ddg_kl(a.gl, a.hl)
+
     stats = {}
+
+    def note(s, pos, src):
+        """One suggestion from one engine — deduped across queries and engines."""
+        key = s.lower().strip()
+        if not key:
+            return
+        rec = stats.get(key)
+        if rec is None:
+            rec = stats[key] = {"keyword": s, "yt": 0, "ddg": 0, "best_pos": pos}
+        rec[src] += 1
+        rec["best_pos"] = min(rec["best_pos"], pos)
+
     for i, q in enumerate(queries):
-        for pos, s in enumerate(_suggest(q, gl=a.gl, hl=a.hl)):
-            key = s.lower().strip()
-            rec = stats.get(key)
-            if rec is None:
-                stats[key] = {"keyword": s, "hits": 1, "best_pos": pos}
-            else:
-                rec["hits"] += 1
-                rec["best_pos"] = min(rec["best_pos"], pos)
+        if "yt" in use:
+            for pos, s in enumerate(_suggest(q, gl=a.gl, hl=a.hl)):
+                note(s, pos, "yt")
+        if "ddg" in use:
+            for pos, s in enumerate(_suggest_ddg(q, kl=kl)):
+                note(s, pos, "ddg")
         if i < len(queries) - 1:
-            time.sleep(0.15)  # be polite; YouTube/Google throttle hard otherwise
+            time.sleep(0.2)  # be polite; both endpoints throttle hard otherwise
 
     stats.pop(seed.lower(), None)  # the seed trivially suggests itself
     if not stats:
@@ -957,7 +1024,12 @@ def cmd_keywords(a):
     rows = []
     for rec in stats.values():
         kw = rec["keyword"]
-        score = rec["hits"] * 10 + max(0, 25 - rec["best_pos"])
+        # YouTube's own suggest is the platform signal (x10); DDG corroborates
+        # web-wide demand (x5). Both counts cap at 5: past that an engine is
+        # just repeating itself (DDG returns near-identical lists across the
+        # whole a-z sweep), which is list stability, not extra demand.
+        score = (min(rec["yt"], 5) * 10 + min(rec["ddg"], 5) * 5
+                 + max(0, 25 - rec["best_pos"]))
         rec["year_trend"] = year in kw
         rec["question"] = kw.lower().split()[0] in question_words
         if rec["year_trend"]:
@@ -970,18 +1042,19 @@ def cmd_keywords(a):
     rows = rows[: a.limit]
 
     if a.json:
-        print(json.dumps({"seed": seed, "gl": a.gl, "hl": a.hl, "queries": len(queries),
-                          "unique": len(stats), "keywords": rows},
-                         ensure_ascii=False, indent=2))
+        print(json.dumps({"seed": seed, "gl": a.gl, "hl": a.hl, "sources": sorted(use),
+                          "kl": kl, "queries": len(queries), "unique": len(stats),
+                          "keywords": rows}, ensure_ascii=False, indent=2))
         return
     print(f'Keyword ideas for "{seed}" — {len(stats)} unique from {len(queries)} queries '
-          f'(gl={a.gl} hl={a.hl})')
-    print("(score = how often + how high it comes back in suggest; "
-          f"Y = mentions {year} (trending now), Q = question form)\n")
-    print(f"{'score':>5}  {'hits':>4}  {'pos':>3}  keyword")
+          f'(gl={a.gl} hl={a.hl}, sources: {",".join(sorted(use))})')
+    print(f"(score = YouTube suggest x10 + DDG x5 (capped at 5 each) + how high it "
+          f"comes back; Y = mentions {year} (trending now), Q = question form)\n")
+    print(f"{'score':>5}  {'yt':>3}  {'ddg':>3}  {'pos':>3}  keyword")
     for r in rows:
         flags = ("  Y" if r["year_trend"] else "") + ("  Q" if r["question"] else "")
-        print(f"{r['score']:>5}  {r['hits']:>4}  #{r['best_pos']:<3} {r['keyword']}{flags}")
+        print(f"{r['score']:>5}  {r['yt']:>3}  {r['ddg']:>3}  #{r['best_pos']:<3} "
+              f"{r['keyword']}{flags}")
 
 
 # ---- Rank tracking: where a video sits for a keyword (no API key) ----
@@ -1135,6 +1208,8 @@ def main():
     p.add_argument("--limit", type=int, default=25)
     p.add_argument("--gl", default="US", help="region for suggestions (US, IN, GB, …)")
     p.add_argument("--hl", default="en", help="suggestion language (en, hi, ja, …)")
+    p.add_argument("--sources", default="yt,ddg",
+                   help="engines to merge: yt (YouTube suggest), ddg (DuckDuckGo)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_keywords)
 
