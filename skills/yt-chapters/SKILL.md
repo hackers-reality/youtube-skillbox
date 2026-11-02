@@ -4,7 +4,12 @@ description: >-
   Write YouTube chapters from a transcript, validated against YouTube's own
   rules so they actually render. Use for "add chapters", "timestamps",
   "break this video into sections".
----
+---**Pipeline Position:** Post-Production — Chapters from Transcript
+**Inputs:** Transcript from transcript skill
+**Outputs:** Validated YouTube chapters → feeds yt-package (packaging)
+**Triggers:** add chapters, timestamps, break this video into sections
+
+
 
 # 
 

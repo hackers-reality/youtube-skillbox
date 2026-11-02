@@ -5,7 +5,12 @@ description: >-
   checking truncation, duplication and vagueness before publish. Use for
   "title ideas", "what should I call this", "thumbnail text", "my CTR is
   bad", packaging, or any request to rename or repackage an existing video.
----
+---**Pipeline Position:** Phase 4 — Title/Thumbnail Audit
+**Inputs:** Channel titles from youtube skill; hook scores from yt-script
+**Outputs:** Title scores, thumbnail briefs → feeds yt-seo, yt-audit
+**Triggers:** title ideas, thumbnail text, packaging, CTR is bad
+
+
 
 # 
 

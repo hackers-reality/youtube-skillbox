@@ -5,6 +5,10 @@ description: "Use when the spoken content, captions, or subtitles of a YouTube v
 
 # Transcript
 
+**Pipeline Position:** Phase 2 — Content Extraction
+**Inputs:** Video IDs from youtube skill (Phase 1)
+**Outputs:** Full transcript JSON (text, timestamps, metadata) → feeds yt-script (hook scoring), yt-seo (spoken keywords), yt-audit (retention analysis)
+
 Extract the spoken text of any YouTube video — **free, no API key, no credits** — using local `yt-dlp`.
 
 ## Prerequisites

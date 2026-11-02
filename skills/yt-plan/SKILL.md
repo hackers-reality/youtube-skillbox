@@ -5,7 +5,12 @@ description: >-
   what order, sized to the creator's actual capacity. Use for "plan my
   week", "content calendar", "what should I post", "I have no idea what to
   make next".
----
+---**Pipeline Position:** Post-Audit — Content Planning
+**Inputs:** Audit output (yt-audit) + keywords (yt-seo) + outliers (yt-viral)
+**Outputs:** Weekly/monthly content calendar → feeds yt-script, yt-package
+**Triggers:** plan my week, content calendar, what should I post
+
+
 
 # 
 

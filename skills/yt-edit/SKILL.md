@@ -5,7 +5,12 @@ description: >-
   filler cues and retakes, with timecodes. Use for "edit this", "cut the
   dead space", "tighten this video", "I rambled", or any request to shorten
   footage from a transcript.
----
+---**Pipeline Position:** Post-Production — Edit Decision List
+**Inputs:** Transcript from transcript skill
+**Outputs:** Edit decision list (dead air, fillers, retakes) → feeds production
+**Triggers:** edit this, cut dead space, tighten this video
+
+
 
 # 
 

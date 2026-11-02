@@ -587,6 +587,19 @@ def cmd_channel(a):
         base = base.rstrip("/").split("/videos")[0] + f"/{a.tab}"
     args = [base, "--playlist-items", f"1-{a.limit}"]
     entries = dump_entries(args)
+    # flat-playlist doesn't include duration; fetch per-video if --with-duration
+    if getattr(a, "with_duration", False):
+        for e in entries:
+            vid = e.get("id")
+            if vid:
+                detail = run_ytdlp(["--skip-download", "--dump-single-json", f"https://www.youtube.com/watch?v={vid}"])
+                if detail.returncode == 0:
+                    try:
+                        d = json.loads(detail.stdout)
+                        e["duration"] = d.get("duration")
+                        e["duration_string"] = d.get("duration_string")
+                    except json.JSONDecodeError:
+                        pass
     print_list([slim(e) for e in entries[: a.limit]], a.json)
 
 
@@ -597,6 +610,19 @@ def cmd_latest(a):
         base = base.rstrip("/") + "/videos"
     args = [base, "--playlist-items", f"1-{a.limit}"]
     entries = dump_entries(args)
+    # flat-playlist doesn't include duration; fetch per-video if --with-duration
+    if getattr(a, "with_duration", False):
+        for e in entries:
+            vid = e.get("id")
+            if vid:
+                detail = run_ytdlp(["--skip-download", "--dump-single-json", f"https://www.youtube.com/watch?v={vid}"])
+                if detail.returncode == 0:
+                    try:
+                        d = json.loads(detail.stdout)
+                        e["duration"] = d.get("duration")
+                        e["duration_string"] = d.get("duration_string")
+                    except json.JSONDecodeError:
+                        pass
     print_list([slim(e) for e in entries[: a.limit]], a.json)
 
 
@@ -1841,12 +1867,14 @@ def main():
     p.add_argument("handle", help="@handle, channel URL, or UC... ID")
     p.add_argument("--limit", type=int, default=15)
     p.add_argument("--tab", choices=["videos", "shorts", "streams"], default="videos")
+    p.add_argument("--with-duration", action="store_true", help="fetch duration per video (slower)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_channel)
 
     p = sub.add_parser("latest", help="Most recent uploads")
     p.add_argument("handle", help="@handle or channel URL")
     p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--with-duration", action="store_true", help="fetch duration per video (slower)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_latest)
 

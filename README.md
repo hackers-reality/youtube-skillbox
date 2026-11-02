@@ -70,6 +70,47 @@ Everything is free. There is **no paid tier, no API key, and no account** anywhe
 
 ---
 
+## 🔗 How the Skills Chain Together (The Pipeline)
+
+The 17 skills aren't isolated — they form an **8-phase audit pipeline** that agents can run end-to-end:
+
+```mermaid
+graph TD
+    A[User: "Audit my channel"] --> B[Phase 1: youtube]
+    B --> C[Phase 2: transcript]
+    C --> D[Phase 3: yt-script]
+    D --> E[Phase 4: yt-package]
+    E --> F[Phase 5: yt-seo]
+    F --> G[Phase 6: yt-viral]
+    G --> H[Phase 7: yt-retention*]
+    H --> I[Phase 8: yt-audit]
+    
+    B --> J[Data: sections, videos, home, profile]
+    C --> K[Transcripts for top 3 videos]
+    D --> L[Hook scores (0-100)]
+    E --> M[Title/thumbnail scores]
+    F --> N[Keywords, competition, scorecards]
+    G --> O[Outliers, competitor analysis]
+    I --> P[ONE fix + 3 working + what NOT to do]
+```
+
+*Phase 7 (yt-retention) optional — requires YouTube Studio CSV export.
+
+| Phase | Skill | Input | Output | Purpose |
+|-------|-------|-------|--------|---------|
+| 1 | `youtube` | @handle | Channel data (sections, videos, home, profile) | Data foundation |
+| 2 | `transcript` | Top 3 video IDs | Full transcripts (JSON + timestamps) | Raw content |
+| 3 | `yt-script` | Transcripts | Hook scores (0-100) per video | Retention hooks |
+| 4 | `yt-package` | Titles + hook scores | Title/thumbnail scores + briefs | CTR optimization |
+| 5 | `yt-seo` | Niche + target video | Keywords, competition, scorecards | Search visibility |
+| 6 | `yt-viral` | Channel + niche | Outliers (VPH), competitor gaps | Growth levers |
+| 7 | `yt-retention` | Studio CSV (optional) | Drop-off points, curves | Pacing fixes |
+| 8 | `yt-audit` | **All above** | **ONE fix + 3 working + don't-do** | **Final deliverable** |
+
+**Each skill declares its pipeline position in its SKILL.md** — agents read this to know what comes before/after.
+
+---
+
 ## 📺 The `youtube` research skill
 
 Thirteen subcommands behind one script — `skills/youtube/scripts/ytdata.py`:

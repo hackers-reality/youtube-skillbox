@@ -6,7 +6,12 @@ description: >-
   marked. Use whenever the user wants a video script, a hook, an opening
   line, "what should I say", "write my next video", or is about to record
   and does not have the first fifteen seconds yet.
----
+---**Pipeline Position:** Phase 3 — Hook Analysis
+**Inputs:** Transcripts from transcript skill (Phase 2)
+**Outputs:** Hook scores (0-100) per video → feeds yt-package, yt-audit
+**Triggers:** write script, hook ideas, opening line, first 15 seconds
+
+
 
 # 
 

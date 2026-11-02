@@ -4,7 +4,12 @@ description: >-
   Draft replies to YouTube comments in the creator's voice, triaged by which
   ones are worth answering. Use for "reply to my comments", "handle the
   comment section", "someone asked X", or a pasted comment thread.
----
+---**Pipeline Position:** Post-Publish — Community Management
+**Inputs:** Channel handle + comment threads from youtube skill
+**Outputs:** Draft replies in creator voice → feeds community management
+**Triggers:** reply to comments, handle comment section
+
+
 
 # 
 

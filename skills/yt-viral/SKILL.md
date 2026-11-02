@@ -5,7 +5,12 @@ description: >-
   by how far each video beat its own channel, then name the formula. Use for
   "what's working right now", "find viral videos in my niche", "why did this
   blow up", competitor research, or a swipe file.
----
+---**Pipeline Position:** Phase 6 — Outlier / Competitor Analysis
+**Inputs:** Channel handle from user; niche from yt-seo
+**Outputs:** Outliers (views/subs ratio), competitor analysis → feeds yt-audit, yt-plan
+**Triggers:** what's working in niche, find viral videos, why did this blow up
+
+
 
 # 
 

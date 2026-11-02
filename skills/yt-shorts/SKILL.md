@@ -4,7 +4,12 @@ description: >-
   Find the Shorts hiding inside a long video and write them, using the
   transcript to pick self-contained moments. Use for "cut this into shorts",
   "clip this", "repurpose this video", "what should I clip".
----
+---**Pipeline Position:** Post-Production — Shorts from Long-form
+**Inputs:** Transcript from transcript skill
+**Outputs:** Self-contained Shorts scripts → feeds yt-package, yt-plan
+**Triggers:** cut this into shorts, clip this, repurpose this video
+
+
 
 # 
 

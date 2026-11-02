@@ -4,7 +4,12 @@ description: >-
   Audit a YouTube channel end to end - packaging, consistency, the first
   fifteen seconds, and what to fix first. Use for "audit my channel", "why
   isn't my channel growing", "review my videos", or a pasted channel URL.
----
+---**Pipeline Position:** Phase 8 — Final Synthesis (ONE fix)
+**Inputs:** ALL previous phases: youtube, transcript, yt-script, yt-package, yt-seo, yt-viral, yt-retention
+**Outputs:** Single biggest fix, 3 working things, what NOT to do → final deliverable
+**Triggers:** audit my channel, why isn't this growing, review my videos
+
+
 
 # yt-audit
 
