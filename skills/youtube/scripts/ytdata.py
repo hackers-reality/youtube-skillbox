@@ -978,21 +978,21 @@ def _scorecard_checks(info, target_kw):
         else:
             checks.append(("desc_length", 5, True, f"✅ Description ≥150 chars"))
 
-    # 3. Tags checks
+    # 3. Tags checks (low weight — YouTube has confirmed tags barely matter for ranking)
     if not tags:
-        checks.append(("tags_exist", 10, False, "❌ No tags"))
+        checks.append(("tags_exist", 3, False, "⚠ No tags (low impact)"))
     else:
-        checks.append(("tags_exist", 10, True, f"✅ {len(tags)} tags"))
+        checks.append(("tags_exist", 3, True, f"✅ {len(tags)} tags"))
         if kw and any(kw in t.lower() for t in tags):
-            checks.append(("tags_kw", 5, True, "✅ Keyword in tags"))
+            checks.append(("tags_kw", 2, True, "✅ Keyword in tags"))
         elif kw:
-            checks.append(("tags_kw", 5, False, "❌ Keyword not in tags"))
+            checks.append(("tags_kw", 2, False, "⚠ Keyword not in tags (low impact)"))
         if len(tags) < 5:
-            checks.append(("tags_count", 5, False, f"⚠ Only {len(tags)} tags — use up to 15"))
+            checks.append(("tags_count", 2, False, f"⚠ Only {len(tags)} tags"))
         elif len(tags) > 15:
-            checks.append(("tags_count", 5, False, f"⚠ {len(tags)} tags — YouTube ignores after 15"))
+            checks.append(("tags_count", 2, False, f"⚠ {len(tags)} tags — YouTube ignores after 15"))
         else:
-            checks.append(("tags_count", 5, True, f"✅ Tag count in sweet spot (5–15)"))
+            checks.append(("tags_count", 2, True, f"✅ Tag count in sweet spot (5–15)"))
 
     # 4. Chapters / timestamps
     if chapters:
@@ -1080,6 +1080,27 @@ def cmd_outliers(a):
     if not subs:
         print("ERROR: could not determine subscriber count", file=sys.stderr)
         sys.exit(1)
+
+    # Verify subs by also checking a video from this channel (cross-check)
+    # Some channels report different counts on profile vs video pages
+    if a.verify_subs:
+        probe = run_ytdlp(["--skip-download", "--flat-playlist", "--dump-json",
+                           f"{base}/videos", "--playlist-end", "1"])
+        for line in probe.stdout.strip().splitlines():
+            try:
+                pv = json.loads(line)
+                vproc = run_ytdlp(["--skip-download", "--dump-single-json",
+                                   f"https://www.youtube.com/watch?v={pv.get('id')}"])
+                if vproc.returncode == 0:
+                    vd = json.loads(vproc.stdout)
+                    vsubs = vd.get("channel_follower_count")
+                    if vsubs and vsubs != subs:
+                        print(f"NOTE: profile subs={subs:,} vs video subs={vsubs:,} — using video count",
+                              file=sys.stderr)
+                        subs = vsubs
+                        break
+            except Exception:
+                pass
 
     # Fetch videos from the requested tab
     tab_suffix = f"/{a.tab}" if a.tab in ("videos", "shorts") else ""
@@ -1225,8 +1246,12 @@ def cmd_gap(a):
 _SUGGEST_URL = "https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&q="
 
 
-def _suggest(q, gl="US", hl="en", timeout=8):
-    """One YouTube suggest lookup. Returns a list of suggestion strings (empty on any failure)."""
+def _suggest(q, gl="US", hl="en", timeout=8, lang_filter=None):
+    """One YouTube suggest lookup. Returns a list of suggestion strings (empty on any failure).
+
+    lang_filter: if set, only return suggestions matching this script.
+      None = auto from hl (e.g. hl=hi allows Devanagari, hl=ja allows Japanese, else Latin-only)
+    """
     url = f"{_SUGGEST_URL}{urllib.parse.quote(q)}&gl={gl}&hl={hl}"
     req = urllib.request.Request(url, headers=_UA)
     try:
@@ -1244,8 +1269,40 @@ def _suggest(q, gl="US", hl="en", timeout=8):
     out = []
     for item in payload[1]:
         if isinstance(item, list) and item and isinstance(item[0], str):
-            out.append(item[0])
+            s = item[0]
+            if _passes_lang_filter(s, lang_filter or hl):
+                out.append(s)
     return out
+
+
+def _passes_lang_filter(text, hl):
+    """Return True if text matches the expected script for the locale."""
+    # Map hl to allowed Unicode scripts
+    script_map = {
+        "hi": "Devanagari", "bn": "Bengali", "ta": "Tamil", "te": "Telugu",
+        "kn": "Kannada", "ml": "Malayalam", "gu": "Gujarati", "pa": "Gurmukhi",
+        "or": "Oriya", "as": "Assamese", "mr": "Devanagari",
+        "ja": ["Hiragana", "Katakana", "Katakana-Hiragana", "Han"],
+        "ko": "Hangul", "zh": "Han", "zh-cn": "Han", "zh-tw": "Han",
+        "ar": "Arabic", "fa": "Arabic", "ur": "Arabic",
+        "ru": "Cyrillic", "uk": "Cyrillic", "bg": "Cyrillic", "sr": "Cyrillic",
+        "th": "Thai", "vi": "Latin",  # Vietnamese uses Latin with diacritics
+    }
+    allowed = script_map.get(hl.lower())
+    if allowed is None:
+        allowed = "Latin"  # default: Latin only
+    if isinstance(allowed, str):
+        allowed = [allowed]
+    # Normalize allowed scripts to uppercase for comparison
+    allowed = [s.upper() for s in allowed]
+
+    import unicodedata
+    for ch in text:
+        if ch.isalpha():
+            script = unicodedata.name(ch, "").split()[0] if unicodedata.name(ch, "") else "Unknown"
+            if script not in allowed:  # Latin is already in allowed for en
+                return False
+    return True
 
 
 # DuckDuckGo autocomplete — the second opinion. YouTube's suggest tells you what
@@ -1281,8 +1338,11 @@ def _ddg_kl(gl, hl):
     return _DDG_KL.get((gl, hl)) or _DDG_KL.get((gl, "en"))
 
 
-def _suggest_ddg(q, kl=None, timeout=8):
-    """One DuckDuckGo autocomplete lookup (list form). Empty list on any failure."""
+def _suggest_ddg(q, kl=None, timeout=8, lang_filter=None):
+    """One DuckDuckGo autocomplete lookup (list form). Empty list on any failure.
+
+    lang_filter: same as _suggest — filter by script.
+    """
     url = f"https://duckduckgo.com/ac/?q={urllib.parse.quote(q)}&type=list"
     if kl:
         url += f"&kl={kl}"
@@ -1293,9 +1353,9 @@ def _suggest_ddg(q, kl=None, timeout=8):
     except Exception:
         return []
     if isinstance(data, list) and len(data) > 1 and isinstance(data[1], list):
-        return [s for s in data[1] if isinstance(s, str)]
+        return [s for s in data[1] if isinstance(s, str) and _passes_lang_filter(s, lang_filter)]
     if isinstance(data, list):   # bare form: [{"phrase": "..."}, ...]
-        return [d.get("phrase") for d in data if isinstance(d, dict) and d.get("phrase")]
+        return [d.get("phrase") for d in data if isinstance(d, dict) and d.get("phrase") and _passes_lang_filter(d.get("phrase", ""), lang_filter)]
     return []
 
 
@@ -1332,10 +1392,10 @@ def cmd_keywords(a):
 
     for i, q in enumerate(queries):
         if "yt" in use:
-            for pos, s in enumerate(_suggest(q, gl=a.gl, hl=a.hl)):
+            for pos, s in enumerate(_suggest(q, gl=a.gl, hl=a.hl, lang_filter=a.hl)):
                 note(s, pos, "yt")
         if "ddg" in use:
-            for pos, s in enumerate(_suggest_ddg(q, kl=kl)):
+            for pos, s in enumerate(_suggest_ddg(q, kl=kl, lang_filter=a.hl)):
                 note(s, pos, "ddg")
         if i < len(queries) - 1:
             time.sleep(0.2)  # be polite; both endpoints throttle hard otherwise
@@ -1842,6 +1902,8 @@ def main():
                    help="minimum views/subscriber ratio (default 3.0)")
     p.add_argument("--limit", type=int, default=20, help="max videos to scan")
     p.add_argument("--tab", choices=["videos", "shorts"], default="videos")
+    p.add_argument("--verify-subs", action="store_true",
+                   help="cross-check subscriber count against a video from the channel")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_outliers)
 
