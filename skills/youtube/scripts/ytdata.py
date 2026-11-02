@@ -5,19 +5,23 @@ metadata, community posts (paginated), home sections, shows, keyword research
 and rank tracking. No API key, no credits.
 
 Subcommands:
-  search   <query>              Search YouTube videos.
-  keywords <seed>               Keyword ideas + relative demand (YouTube + DDG suggest).
-  compete  <query>              Competition score (0–100) for a keyword from live SERP.
-  track    <query> --video URL  Rank position for a keyword, with ↑↓ history.
-  profile  <handle-or-url>      Channel About/profile section.
-  sections <handle-or-url>      Count every tab (videos/shorts/shows/playlists/posts).
-  channel  <handle-or-url>      List a channel's uploads.
-  latest   <handle-or-url>      Most recent uploads (reverse-chronological).
-  posts    <handle-or-url>      Community posts — paginates past the first page.
-  home     <handle-or-url>      Home tab shelves (Featured Channels, sections).
-  shows    <handle-or-url>      Channel Shows (episode collections).
-  playlist <url-or-id>          List a playlist's videos.
-  info     <url-or-id>          Full metadata for one video (views, likes, date, tags).
+  search     <query>              Search YouTube videos.
+  keywords   <seed>               Keyword ideas + relative demand (YouTube + DDG suggest).
+  compete    <query>              Competition score (0–100) for a keyword from live SERP.
+  trends     <seed>               Historical trend for a seed keyword (from keywords runs).
+  track      <query> --video URL  Rank position for a keyword, with ↑↓ history.
+  scorecard  <video> --keyword    SEO checklist for a video (title/desc/tags/keyword fit).
+  outliers   <handle>             Videos overperforming their channel (views/subs ratio).
+  gap        <seed> --competitor  Content gap: my seed vs competitor's profile keywords.
+  profile    <handle-or-url>      Channel About/profile section.
+  sections   <handle-or-url>      Count every tab (videos/shorts/shows/playlists/posts).
+  channel    <handle-or-url>      List a channel's uploads.
+  latest     <handle-or-url>      Most recent uploads (reverse-chronological).
+  posts      <handle-or-url>      Community posts — paginates past the first page.
+  home       <handle-or-url>      Home tab shelves (Featured Channels, sections).
+  shows      <handle-or-url>      Channel Shows (episode collections).
+  playlist   <url-or-id>          List a playlist's videos.
+  info       <url-or-id>          Full metadata for one video (views, likes, date, tags).
 
 Common flags:
   --limit N        Max results (default 10; max ~50 per call for search).
@@ -933,6 +937,286 @@ def cmd_info(a):
             print(f"{k:>18}: {v}")
 
 
+def _scorecard_checks(info, target_kw):
+    """Run SEO checks on video metadata. Returns (score, checks_list)."""
+    checks = []
+    title = (info.get("title") or "").strip()
+    desc = (info.get("description") or "").strip()
+    tags = info.get("tags") or []
+    duration = info.get("duration_seconds")
+    upload = info.get("upload_date")
+    chapters = info.get("chapters") or []
+
+    kw = (target_kw or "").lower()
+
+    # 1. Title checks
+    if not title:
+        checks.append(("title_exists", 15, False, "❌ No title"))
+    else:
+        checks.append(("title_exists", 15, True, f"✅ Title present ({len(title)} chars)"))
+        if len(title) > 60:
+            checks.append(("title_length", 5, False, f"⚠ Title >60 chars ({len(title)}) — may truncate in search"))
+        else:
+            checks.append(("title_length", 5, True, f"✅ Title ≤60 chars ({len(title)})"))
+        if kw and kw in title.lower():
+            checks.append(("title_kw", 15, True, f"✅ Target keyword in title"))
+        elif kw:
+            checks.append(("title_kw", 15, False, f"❌ Target keyword missing from title"))
+
+    # 2. Description checks
+    if not desc:
+        checks.append(("desc_exists", 10, False, "❌ No description"))
+    else:
+        checks.append(("desc_exists", 10, True, f"✅ Description present ({len(desc)} chars)"))
+        first_two = "\n".join(desc.split("\n")[:2]).lower()
+        if kw and kw in first_two:
+            checks.append(("desc_kw_early", 10, True, "✅ Keyword in first 2 lines (above fold)"))
+        elif kw:
+            checks.append(("desc_kw_early", 10, False, "❌ Keyword not in first 2 lines"))
+        if len(desc) < 150:
+            checks.append(("desc_length", 5, False, f"⚠ Description very short ({len(desc)} chars)"))
+        else:
+            checks.append(("desc_length", 5, True, f"✅ Description ≥150 chars"))
+
+    # 3. Tags checks
+    if not tags:
+        checks.append(("tags_exist", 10, False, "❌ No tags"))
+    else:
+        checks.append(("tags_exist", 10, True, f"✅ {len(tags)} tags"))
+        if kw and any(kw in t.lower() for t in tags):
+            checks.append(("tags_kw", 5, True, "✅ Keyword in tags"))
+        elif kw:
+            checks.append(("tags_kw", 5, False, "❌ Keyword not in tags"))
+        if len(tags) < 5:
+            checks.append(("tags_count", 5, False, f"⚠ Only {len(tags)} tags — use up to 15"))
+        elif len(tags) > 15:
+            checks.append(("tags_count", 5, False, f"⚠ {len(tags)} tags — YouTube ignores after 15"))
+        else:
+            checks.append(("tags_count", 5, True, f"✅ Tag count in sweet spot (5–15)"))
+
+    # 4. Chapters / timestamps
+    if chapters:
+        checks.append(("chapters", 5, True, f"✅ {len(chapters)} chapters"))
+    elif duration and duration > 600:  # >10 min
+        checks.append(("chapters", 5, False, f"⚠ {duration//60} min video — add chapters for retention"))
+    else:
+        checks.append(("chapters", 5, True, "✅ Short video — chapters optional"))
+
+    # 5. Duration sanity
+    if duration:
+        if duration < 30:
+            checks.append(("duration", 5, False, f"⚠ Very short ({duration}s) — may be a Short"))
+        elif duration > 3600:
+            checks.append(("duration", 5, False, f"⚠ Very long ({duration//60} min) — consider splitting"))
+        else:
+            checks.append(("duration", 5, True, f"✅ Duration {duration//60}:{duration%60:02d}"))
+
+    # 6. Upload date freshness (if target kw has year)
+    if kw and any(y in kw for y in ("2024", "2025", "2026", "2027", "2028")):
+        if upload and upload[:4] in kw:
+            checks.append(("freshness", 5, True, f"✅ Upload year matches keyword ({upload[:4]})"))
+        elif upload:
+            checks.append(("freshness", 5, False, f"⚠ Upload {upload[:4]} vs keyword year"))
+
+    total_w = sum(w for _, w, _, _ in checks)
+    earned = sum(w for _, w, ok, _ in checks if ok)
+    score = round(100 * earned / total_w) if total_w else 0
+    return score, checks
+
+
+def cmd_scorecard(a):
+    vid = _video_id(a.video)
+    if not vid:
+        print("ERROR: cannot parse video URL or ID", file=sys.stderr)
+        sys.exit(1)
+    url = f"https://www.youtube.com/watch?v={vid}"
+
+    proc = run_ytdlp(["--skip-download", "--dump-single-json", url])
+    if proc.returncode != 0 or not proc.stdout.strip():
+        err = (proc.stderr or "").strip().splitlines()
+        print(f"ERROR: {err[-1] if err else 'could not fetch info'}", file=sys.stderr)
+        sys.exit(1)
+    info = json.loads(proc.stdout)
+
+    score, checks = _scorecard_checks(info, a.keyword)
+
+    if a.json:
+        print(json.dumps({
+            "video_id": vid,
+            "target_keyword": a.keyword,
+            "score": score,
+            "checks": [{"name": n, "weight": w, "pass": ok, "detail": d}
+                       for n, w, ok, d in checks]
+        }, ensure_ascii=False, indent=2))
+        return
+
+    print(f"SEO Scorecard for {vid}" + (f"  (target: {a.keyword})" if a.keyword else "") + f"\n")
+    print(f"Overall: {score}/100\n")
+    for name, weight, ok, detail in checks:
+        mark = "✅" if ok else "❌"
+        print(f"  {mark}  [{weight:>2}]  {detail}")
+
+
+def cmd_outliers(a):
+    """Find videos where views/subscriber ratio exceeds threshold."""
+    # Resolve handle to channel URL and get subscriber count
+    from urllib.parse import urlparse
+    handle = a.handle.strip()
+    if handle.startswith("http"):
+        base = handle
+    elif handle.startswith("@"):
+        base = f"https://www.youtube.com/@{handle[1:]}"
+    elif handle.startswith("UC") and len(handle) == 24:
+        base = f"https://www.youtube.com/channel/{handle}"
+    else:
+        base = f"https://www.youtube.com/@{handle}"
+
+    proc = run_ytdlp(["--skip-download", "--dump-single-json", base])
+    if proc.returncode != 0 or not proc.stdout.strip():
+        print("ERROR: could not resolve channel", file=sys.stderr)
+        sys.exit(1)
+    d = json.loads(proc.stdout)
+    subs = d.get("channel_follower_count")
+    if not subs:
+        print("ERROR: could not determine subscriber count", file=sys.stderr)
+        sys.exit(1)
+
+    # Fetch videos from the requested tab
+    tab_suffix = f"/{a.tab}" if a.tab in ("videos", "shorts") else ""
+    tab_url = base + tab_suffix
+    proc = run_ytdlp(["--skip-download", "--flat-playlist", "--dump-json", tab_url,
+                      "--playlist-end", str(a.limit)])
+    if proc.returncode != 0 or not proc.stdout.strip():
+        print("ERROR: no videos found", file=sys.stderr)
+        sys.exit(1)
+
+    outliers = []
+    for line in proc.stdout.strip().splitlines():
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        vid = d.get("id")
+        if not vid:
+            continue
+        # Get detailed info for view count
+        detail = run_ytdlp(["--skip-download", "--dump-single-json",
+                            f"https://www.youtube.com/watch?v={vid}"])
+        if detail.returncode != 0:
+            continue
+        try:
+            v = json.loads(detail.stdout)
+        except json.JSONDecodeError:
+            continue
+        views = v.get("view_count") or 0
+        if views == 0:
+            continue
+        ratio = views / subs
+        if ratio >= a.min_ratio:
+            outliers.append({
+                "video_id": vid,
+                "title": v.get("title"),
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "views": views,
+                "ratio": round(ratio, 2),
+                "duration": v.get("duration"),
+                "upload_date": v.get("upload_date"),
+            })
+
+    outliers.sort(key=lambda x: -x["ratio"])
+
+    if a.json:
+        print(json.dumps({"channel": base, "subscribers": subs,
+                          "min_ratio": a.min_ratio, "outliers": outliers},
+                         ensure_ascii=False, indent=2))
+        return
+
+    if not outliers:
+        print(f"No outliers found for {base} (min ratio {a.min_ratio}x, {subs:,} subs)")
+        return
+
+    print(f"Outliers for {base}  ({subs:,} subs, min ratio {a.min_ratio}x)\n")
+    for o in outliers:
+        dur = fmt_duration(o["duration"])
+        print(f"  {o['ratio']:.1f}x  {fmt_views(o['views']):>8}  {dur:>8}  {o['title']}")
+        print(f"        {o['url']}")
+
+
+def cmd_gap(a):
+    """Content gap: compare my seed keyword ideas vs competitor's profile keywords."""
+    # Get my keywords
+    class Args:
+        pass
+    my_args = Args()
+    my_args.seed = a.seed
+    my_args.letters = ""
+    my_args.patterns = True
+    my_args.limit = a.limit * 2
+    my_args.gl = a.gl
+    my_args.hl = a.hl
+    my_args.sources = "yt,ddg"
+    my_args.json = True
+
+    # Capture keywords output
+    import io, sys
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        cmd_keywords(my_args)
+        my_output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+    my_data = json.loads(my_output)
+    my_kws = {k["keyword"].lower(): k for k in my_data["keywords"]}
+
+    # Get competitor profile
+    comp = a.competitor.strip()
+    if comp.startswith("http"):
+        base = comp
+    elif comp.startswith("@"):
+        base = f"https://www.youtube.com/@{comp[1:]}"
+    elif comp.startswith("UC") and len(comp) == 24:
+        base = f"https://www.youtube.com/channel/{comp}"
+    else:
+        base = f"https://www.youtube.com/@{comp}"
+
+    proc = run_ytdlp(["--skip-download", "--dump-single-json", base])
+    if proc.returncode != 0 or not proc.stdout.strip():
+        print("ERROR: could not fetch competitor profile", file=sys.stderr)
+        sys.exit(1)
+    d = json.loads(proc.stdout)
+    comp_tags = [t.lower() for t in (d.get("tags") or [])]
+
+    if a.json:
+        print(json.dumps({
+            "seed": a.seed,
+            "competitor": base,
+            "my_keywords": list(my_kws.values())[:a.limit],
+            "competitor_keywords": comp_tags,
+            "only_me": [k for kw, k in my_kws.items() if kw not in comp_tags][:a.limit],
+            "only_them": [kw for kw in comp_tags if kw not in my_kws][:a.limit],
+            "both": [k for kw, k in my_kws.items() if kw in comp_tags][:a.limit],
+        }, ensure_ascii=False, indent=2))
+        return
+
+    only_me = [k for kw, k in my_kws.items() if kw not in comp_tags][:a.limit]
+    only_them = [kw for kw in comp_tags if kw not in my_kws][:a.limit]
+    both = [k for kw, k in my_kws.items() if kw in comp_tags][:a.limit]
+
+    print(f'Content Gap: "{a.seed}" vs {base}\n')
+    print(f"My unique keywords ({len(only_me)}):")
+    for k in only_me:
+        flags = ("  Y" if k["year_trend"] else "") + ("  Q" if k["question"] else "")
+        print(f"  {k['score']:>3}  {k['keyword']}{flags}")
+    print(f"\nCompetitor unique keywords ({len(only_them)}):")
+    for kw in only_them:
+        print(f"  {kw}")
+    print(f"\nShared keywords ({len(both)}):")
+    for k in both:
+        flags = ("  Y" if k["year_trend"] else "") + ("  Q" if k["question"] else "")
+        print(f"  {k['score']:>3}  {k['keyword']}{flags}")
+
+
 # ---- Keyword research via YouTube suggest (free, no API key) ----
 # The suggest box runs on real query popularity — the same signal free SEO
 # tools approximate volume with. We expand a seed through the alphabet and
@@ -986,6 +1270,9 @@ _DDG_KL = {
     ("TH", "th"): "th-th", ("SA", "ar"): "sa-ar", ("AE", "ar"): "ae-ar",
     ("IL", "he"): "il-he",
 }
+
+# Trend log — keyword score snapshots across runs (zero deps, pure JSON)
+_TREND_LOG = os.path.expanduser("~/.ytdata-trendlog.json")
 
 
 def _ddg_kl(gl, hl):
@@ -1080,6 +1367,9 @@ def cmd_keywords(a):
     rows.sort(key=lambda r: (-r["score"], r["keyword"]))
     rows = rows[: a.limit]
 
+    # Append snapshot to trend log (pure JSON, zero deps)
+    _append_trend_log(seed, a.gl, a.hl, rows)
+
     if a.json:
         print(json.dumps({"seed": seed, "gl": a.gl, "hl": a.hl, "sources": sorted(use),
                           "kl": kl, "queries": len(queries), "unique": len(stats),
@@ -1094,6 +1384,94 @@ def cmd_keywords(a):
         flags = ("  Y" if r["year_trend"] else "") + ("  Q" if r["question"] else "")
         print(f"{r['score']:>5}  {r['yt']:>3}  {r['ddg']:>3}  #{r['best_pos']:<3} "
               f"{r['keyword']}{flags}")
+
+
+def _append_trend_log(seed, gl, hl, rows):
+    """Append a keyword score snapshot to the trend log."""
+    entry = {
+        "seed": seed,
+        "gl": gl,
+        "hl": hl,
+        "ts": time.strftime("%Y-%m-%d %H:%M"),
+        "keywords": [{"k": r["keyword"], "s": r["score"],
+                      "yt": r["yt"], "ddg": r["ddg"], "pos": r["best_pos"],
+                      "Y": r["year_trend"], "Q": r["question"]}
+                     for r in rows]
+    }
+    try:
+        with open(_TREND_LOG, encoding="utf-8") as f:
+            log = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        log = []
+    log.append(entry)
+    # keep last 500 entries per seed/gl/hl to bound file size
+    key = (seed, gl, hl)
+    log = [e for e in log if (e["seed"], e["gl"], e["hl"]) != key][-499:] + [entry]
+    with open(_TREND_LOG, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+
+
+def cmd_trends(a):
+    """Show historical trend for a seed keyword from the trend log."""
+    try:
+        with open(_TREND_LOG, encoding="utf-8") as f:
+            log = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("ERROR: no trend data yet — run `keywords` a few times first", file=sys.stderr)
+        sys.exit(1)
+
+    entries = [e for e in log
+               if e["seed"].lower() == a.seed.lower()
+               and e["gl"].upper() == a.gl.upper()
+               and e["hl"].lower() == a.hl.lower()]
+    if not entries:
+        print(f"ERROR: no trend data for seed={a.seed!r} gl={a.gl} hl={a.hl}", file=sys.stderr)
+        sys.exit(1)
+
+    # filter by days
+    if a.days:
+        cutoff = time.time() - a.days * 86400
+        entries = [e for e in entries
+                   if time.mktime(time.strptime(e["ts"], "%Y-%m-%d %H:%M")) >= cutoff]
+
+    if not entries:
+        print("No entries in the selected window.")
+        return
+
+    # collect all keywords ever seen for this seed
+    all_kw = {}
+    for e in entries:
+        for kw in e["keywords"]:
+            all_kw.setdefault(kw["k"], []).append((e["ts"], kw["s"], kw["yt"], kw["ddg"], kw["pos"], kw["Y"], kw["Q"]))
+
+    if a.json:
+        print(json.dumps({"seed": a.seed, "gl": a.gl, "hl": a.hl,
+                          "window_days": a.days, "keywords": all_kw},
+                         ensure_ascii=False, indent=2))
+        return
+
+    print(f'Trend for "{a.seed}"  (gl={a.gl} hl={a.hl}'
+          f'{", last " + str(a.days) + " days" if a.days else ""}) — {len(entries)} snapshots\n')
+
+    # show top 20 by latest score
+    latest = entries[-1]
+    latest_scores = {kw["k"]: kw["s"] for kw in latest["keywords"]}
+    top_kw = sorted(latest_scores.items(), key=lambda x: -x[1])[: a.limit]
+
+    for kw, score in top_kw:
+        hist = all_kw[kw]
+        scores = [h[1] for h in hist]
+        delta = scores[-1] - scores[0] if len(scores) > 1 else 0
+        vel = scores[-1] - scores[-2] if len(scores) > 1 else 0
+        trend = "↑" if vel > 5 else ("↓" if vel < -5 else "→")
+        spark = "".join("█" * min(8, max(1, s // 10)) for s in scores[-8:])
+        first_ts, last_ts = hist[0][0], hist[-1][0]
+        print(f"  {score:>3}  {trend}  {spark}  {kw}")
+        if a.verbose:
+            print(f"       {len(hist)} pts  {first_ts} -> {last_ts}  Delta={delta:+d}  vel={vel:+d}")
+
+    if a.verbose:
+        print(f"\nAll {len(all_kw)} keywords tracked. Use --limit to see more.")
 
 
 # ---- Rank tracking: where a video sits for a keyword (no API key) ----
@@ -1148,6 +1526,13 @@ def _serp_stats(entries, query, top=10):
              if isinstance(e.get("view_count"), (int, float)) and e["view_count"] > 0]
     ages = [e["age_days"] for e in rows
             if isinstance(e.get("age_days"), (int, float))]
+    # velocity: views per day for each result (where both exist)
+    velocities = [e["view_count"] / max(1, e["age_days"])
+                  for e in rows
+                  if isinstance(e.get("view_count"), (int, float))
+                  and e["view_count"] > 0
+                  and isinstance(e.get("age_days"), (int, float))
+                  and e["age_days"] > 0]
     verified = sum(1 for e in rows if e.get("channel_is_verified"))
 
     # how much of the query's content already appears in the titles
@@ -1194,6 +1579,11 @@ def _serp_stats(entries, query, top=10):
         # sqrt curve: ~1 month -> 13, 1 year -> 45, 5 years -> 100
         v = min(100.0, math.sqrt(max(med_age, 0) / 1825) * 100)
         sig["entrenchment"] = (15, v, f"median age {_fmt_age(int(med_age))}")
+    if velocities:
+        med_vel = _median(velocities)
+        # log scale: 10 vpd -> ~0, 100K vpd -> 100
+        v = max(0.0, min(100.0, (math.log10(max(med_vel, 1)) - 1) / 5 * 100))
+        sig["velocity"] = (10, v, f"median {fmt_views(int(med_vel))} views/day")
 
     if not sig:
         return None
@@ -1252,6 +1642,13 @@ def _compete_advice(s):
     if "authority" in by and by["authority"]["value"] >= 70:
         out.append("the top is dominated by verified channels — "
                    "authority matters more than usual for this query")
+    if "velocity" in by:
+        if by["velocity"]["value"] >= 70:
+            out.append("this keyword moves FAST — top videos pull huge daily views, "
+                       "publish quickly and promote hard in first 48h")
+        elif by["velocity"]["value"] <= 20:
+            out.append("slow burn keyword — daily views are low, but results stick "
+                       "around; evergreen content works here")
     if not out:
         out.append("balanced field — a tighter title and a stronger click-through "
                    "rate are the way in")
@@ -1433,6 +1830,30 @@ def main():
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_info)
 
+    p = sub.add_parser("scorecard", help="SEO checklist for a video (title/desc/tags/keyword fit)")
+    p.add_argument("video", help="Video URL or ID")
+    p.add_argument("--keyword", help="target keyword to check fit against")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_scorecard)
+
+    p = sub.add_parser("outliers", help="Find videos overperforming their channel (views/subs ratio)")
+    p.add_argument("handle", help="@handle, channel URL, or UC... ID")
+    p.add_argument("--min-ratio", type=float, default=3.0,
+                   help="minimum views/subscriber ratio (default 3.0)")
+    p.add_argument("--limit", type=int, default=20, help="max videos to scan")
+    p.add_argument("--tab", choices=["videos", "shorts"], default="videos")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_outliers)
+
+    p = sub.add_parser("gap", help="Content gap: my seed keywords vs competitor's profile keywords")
+    p.add_argument("seed", help="Your seed keyword")
+    p.add_argument("--competitor", required=True, help="Competitor @handle, URL, or UC... ID")
+    p.add_argument("--gl", default="US", help="region for suggestions (US, IN, GB, …)")
+    p.add_argument("--hl", default="en", help="suggestion language (en, hi, ja, …)")
+    p.add_argument("--limit", type=int, default=20, help="keywords to show per side")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_gap)
+
     p = sub.add_parser("keywords", help="Keyword ideas + relative volume from YouTube suggest (no API key)")
     p.add_argument("seed", help="Seed keyword, e.g. \"thumbnail ideas\"")
     p.add_argument("--letters", default="abcdefghijklmnopqrstuvwxyz",
@@ -1454,6 +1875,16 @@ def main():
     p.add_argument("--hl", default="en", help="interface language (en, hi, ja, …)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_compete)
+
+    p = sub.add_parser("trends", help="Historical trend for a seed keyword (from keywords runs)")
+    p.add_argument("seed", help="Seed keyword, e.g. \"youtube seo\"")
+    p.add_argument("--gl", default="US", help="region (US, IN, GB, …)")
+    p.add_argument("--hl", default="en", help="suggestion language (en, hi, ja, …)")
+    p.add_argument("--days", type=int, help="only show last N days")
+    p.add_argument("--limit", type=int, default=20, help="how many top keywords to show")
+    p.add_argument("--verbose", action="store_true", help="show full history per keyword")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_trends)
 
     p = sub.add_parser("track", help="Rank tracking — where a video sits for a keyword")
     p.add_argument("query", help="keyword to search")

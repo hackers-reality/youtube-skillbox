@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="assets/banner.svg" alt="YouTube Skillbox — 13 free YouTube skills for AI agents" width="100%">
+  <img src="assets/banner.svg" alt="YouTube Skillbox — 17 free YouTube skills for AI agents" width="100%">
 </div>
 
 <h1 align="center">YouTube Skillbox</h1>
 
 <p align="center">
-  <b>13 free YouTube skills for AI agents — research, transcripts, and the full creator workflow.</b><br>
+  <b>17 free YouTube skills for AI agents — research, transcripts, and the full creator workflow.</b><br>
   No API key · no credits · no expiry — <b>$0 forever</b>
 </p>
 
@@ -42,7 +42,7 @@ Watch the agent in action — one prompt, *"why isn't this channel growing?"* Op
 |---------|-------------|
 | [📺 Demo](#-demo) | Video walkthrough of the agent using the skills |
 | [What is this?](#what-is-this) | Overview of the two-layer architecture |
-| [📺 The `youtube` research skill](#-the-youtube-research-skill) | 13 subcommands — search, keywords, compete, rank tracking, channels, posts, shows |
+| [📺 The `youtube` research skill](#-the-youtube-research-skill) | 17 subcommands — search, keywords, compete, trends, track, scorecard, outliers, gap, channels, posts, shows |
 | [📜 The `transcript` skill](#-the-transcript-skill) | Free transcripts via yt-dlp |
 | [🛠 Gap-fill engine](#-when-yt-dlp-cant-do-it-we-build-it) | How we fill yt-dlp's gaps with raw scrapers |
 | [✂️ The 11 creator skills](#%EF%B8%8F-the-11-creator-skills) | Scripts, SEO, chapters, Shorts, audits, and more |
@@ -111,8 +111,12 @@ Channel: https://www.youtube.com/@MrBeast
 | ------- | ------- |
 | `search` | Videos matching a query — title, duration, views, channel, URL (`--gl` / `--hl` locale) |
 | `keywords` | Keyword ideas from **YouTube suggest + DuckDuckGo** — a–z + pattern expansion, scored by cross-engine demand, `Y` = trending this year |
+| `compete` | Competition score (0–100) for a keyword — views, authority, title density, entrenchment, velocity |
+| `trends` | Historical trend for a seed keyword — score trajectory, velocity, sparklines (from `keywords` runs) |
 | `track` | Where a video ranks for a keyword — with ↑↓ history across runs, kept per locale |
-| `compete` | Competition score (0–100) for a keyword — views, authority, title density, entrenchment |
+| `scorecard` | SEO checklist for a video — title/desc/tags/keyword fit, 0–100 score with actionable fixes |
+| `outliers` | Videos overperforming their channel — views/subscriber ratio, finds breakout content |
+| `gap` | Content gap analysis — my seed keywords vs competitor's profile keywords |
 | `profile` | Channel About section — name, handle, subs, description, **all** keywords |
 | `sections` | One-call counts of every tab: videos / shorts / streams / shows / playlists / posts |
 | `home` | Home-tab shelves — featured video, Shorts, playlists, posts, **Featured Channels** (names + URLs) |
@@ -151,7 +155,7 @@ Prefers human captions, falls back to auto-generated. The JSON form carries `sta
 | **Home sections** | `"This channel does not have a home tab"` | Home-tab shelf parser: featured video, Shorts, playlists, posts, and **Featured Channels** with URLs |
 | **Shows tab** | `0 entries` (can't parse `gridShowRenderer`) | Direct renderer parser → title, episode count, show URL |
 | **Tab counts** | one tab per invocation | `sections` probes every tab and merges yt-dlp + raw results |
-| **Locale-pinned search** | search follows your IP — `gl` is silently set to whatever country you're in, and no flag exists to change it | Raw Innertube `search` POSTs with `client.gl` / `client.hl` pinned explicitly: same rank in New York and New Delhi |
+| **Locale-pinned search** | search follows your IP — `gl` is silently set to whatever country you're in, and no flag exists to change it | Raw Innertube `search` POSTs with `client.gl` / `client.hl` pinned explicitly: same rank in New York and New Delhi. Works for `search`, `keywords`, `track`, `compete`, `trends`. |
 
 All of it is dependency-free Python — no API key, no credits, no tokens to manage.
 
@@ -167,7 +171,7 @@ $ python scripts/ytdata.py home "@MKBHD" --limit 3
 
 ---
 
-## ✂️ The 11 creator skills
+## ✂️ The 10 creator skills
 
 Local tools that turn raw transcripts/data into publishing artifacts:
 

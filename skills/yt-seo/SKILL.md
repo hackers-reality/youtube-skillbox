@@ -52,8 +52,50 @@ better video, not just a better title. Then check where you already stand:
 python skills/youtube/scripts/ytdata.py track "the keyword" --video <your video url>
 ```
 
+The score is 0–100 with a band (EASY / MEDIUM / HARD / SATURATED) and actionable advice.
+A high score means the incumbents are big, old, verified and title-dense — you need a clearly
+better video, not just a better title. Then check where you already stand:
+
+```bash
+python skills/youtube/scripts/ytdata.py track "the keyword" --video <your video url>
+```
+
 The position is logged with its history (`~/.ytdata-ranklog.json`), so a later run shows movement
 instead of a one-off guess. Re-check after publishing, then again a week later.
+
+## Historical trend (new)
+
+Once you've run `keywords` a few times over days/weeks, see the trend:
+
+```bash
+python skills/youtube/scripts/ytdata.py trends "seed idea" --days 30 --verbose
+```
+
+Shows score trajectory (sparklines), velocity (↑/↓/→), and which keywords are gaining or losing demand.
+
+## Content gap & outliers (new)
+
+See what competitors target that you don't:
+
+```bash
+python skills/youtube/scripts/ytdata.py gap "your seed" --competitor @theirhandle
+```
+
+Find breakout videos in a niche (views/subs ratio):
+
+```bash
+python skills/youtube/scripts/ytdata.py outliers @handle --min-ratio 3
+```
+
+## SEO scorecard (new)
+
+Before publishing, audit your metadata against the target keyword:
+
+```bash
+python skills/youtube/scripts/ytdata.py scorecard <video_url> --keyword "your keyword"
+```
+
+Returns 0–100 with weighted checks: title (keyword present, ≤60 chars), description (keyword in first 2 lines, ≥150 chars), tags (keyword present, 5–15 count), chapters (if >10 min), duration sanity, freshness (if keyword has year).
 
 ## The description
 
