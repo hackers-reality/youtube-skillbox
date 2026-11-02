@@ -7,6 +7,7 @@ and rank tracking. No API key, no credits.
 Subcommands:
   search   <query>              Search YouTube videos.
   keywords <seed>               Keyword ideas + relative demand (YouTube + DDG suggest).
+  compete  <query>              Competition score (0–100) for a keyword from live SERP.
   track    <query> --video URL  Rank position for a keyword, with ↑↓ history.
   profile  <handle-or-url>      Channel About/profile section.
   sections <handle-or-url>      Count every tab (videos/shorts/shows/playlists/posts).
@@ -29,6 +30,7 @@ Requires: pip install yt-dlp  (posts/home/shows/search/keywords/track work witho
 """
 import argparse
 import json
+import math
 import os
 import re
 import subprocess
@@ -169,6 +171,29 @@ def _parse_clock(txt):
     return sec
 
 
+def _parse_age(txt):
+    """'1d ago' / '2w ago' / '3mo ago' / '1 year ago' → age in days (None if absent).
+
+    Probed live from search results: YouTube emits the compact units
+    d / w / mo / y (note: months is 'mo', not 'm') plus full words.
+    """
+    if not txt:
+        return None
+    m = re.match(r"\s*(\d+)\s*([a-zA-Z]+)", txt)
+    if not m:
+        return None
+    n, unit = int(m.group(1)), m.group(2).lower().rstrip("s")   # 'months' -> 'month'
+    if unit == "mo":
+        unit = "month"
+    mult = {"second": 1 / 86400, "minute": 1 / 1440, "hour": 1 / 24,
+            "day": 1, "week": 7, "month": 30, "year": 365}.get(unit)
+    if mult is None and len(unit) == 1:
+        # compact form. 'm' alone is never emitted (months are 'mo'), so don't
+        # guess at it — minutes are always written out in full.
+        mult = {"d": 1, "w": 7, "y": 365}.get(unit)
+    return int(n * mult) if mult else None
+
+
 def _parse_video(v):
     """videoRenderer → the same shape `slim()` expects from a flat yt-dlp entry."""
     vid = v.get("videoId")
@@ -181,8 +206,20 @@ def _parse_video(v):
         browse = (runs[0].get("navigationEndpoint") or {}).get("browseEndpoint") or {}
         if browse.get("browseId"):
             chan_url = f"https://www.youtube.com/channel/{browse['browseId']}"
-    verified = any("VERIFIED" in ((b.get("metadataBadgeRenderer") or {}).get("badgeStyleType") or "")
-                   for b in v.get("badges") or [])
+    # The channel checkmark lives in ownerBadges (badges only carries video-level
+    # markers like CC/4K). The style key is `style` on current innertube responses;
+    # older/other surfaces used `badgeStyleType`, so accept either.
+    def _has_verified(badges):
+        for b in badges or []:
+            r = b.get("metadataBadgeRenderer") or {}
+            style = r.get("style") or r.get("badgeStyleType") or ""
+            if "VERIFIED" in style:
+                return True
+            if (r.get("tooltip") or "").lower() == "verified":
+                return True
+        return False
+
+    verified = _has_verified(v.get("ownerBadges")) or _has_verified(v.get("badges"))
     length = _runs_text(v.get("lengthText"))
     return {
         "id": vid,
@@ -196,6 +233,7 @@ def _parse_video(v):
         "channel_is_verified": verified or None,
         "upload_date": None,
         "live_status": None,
+        "age_days": _parse_age(_runs_text(v.get("publishedTimeText"))),
     }
 
 
@@ -503,6 +541,7 @@ def slim(e):
         "verified": e.get("channel_is_verified"),
         "upload_date": e.get("upload_date") or e.get("timestamp"),
         "live_status": e.get("live_status"),
+        "age_days": e.get("age_days"),
     }
 
 
@@ -1068,6 +1107,191 @@ def _video_id(url_or_id):
     return None
 
 
+def _median(xs):
+    s = sorted(xs)
+    m = len(s)
+    if not m:
+        return None
+    return s[m // 2] if m % 2 else (s[m // 2 - 1] + s[m // 2]) / 2
+
+
+def _difficulty_band(score):
+    if score <= 25:
+        return "EASY"
+    if score <= 50:
+        return "MEDIUM"
+    if score <= 75:
+        return "HARD"
+    return "SATURATED"
+
+
+def _serp_stats(entries, query, top=10):
+    """Competition metrics for `query` from the top `top` results (already fetched).
+
+    Four signals, each 0-100 where higher = harder to rank:
+      views        median views of the incumbents (log scale — raw views across
+                   niches are not comparable)
+      authority    share of verified channels
+      titles       how tightly their titles already match the query
+      entrenchment how old the incumbents are (old results are hard to displace)
+
+    Signals with no data are dropped and the remaining weights renormalised
+    rather than silently counted as zero — the yt-dlp fallback carries no age.
+    Returns None when there is nothing to score.
+    """
+    rows = [e for e in entries[:top] if isinstance(e, dict) and e.get("id")]
+    if not rows:
+        return None
+    n = len(rows)
+
+    views = [e["view_count"] for e in rows
+             if isinstance(e.get("view_count"), (int, float)) and e["view_count"] > 0]
+    ages = [e["age_days"] for e in rows
+            if isinstance(e.get("age_days"), (int, float))]
+    verified = sum(1 for e in rows if e.get("channel_is_verified"))
+
+    # how much of the query's content already appears in the titles
+    stops = {"how", "the", "for", "and", "with", "your", "you", "that", "this",
+             "what", "when", "why", "from", "into", "about", "will", "can"}
+    toks = [t for t in re.findall(r"[a-z0-9]+", (query or "").lower())
+            if len(t) >= 3 and t not in stops]
+    cover = []
+    if toks:
+        for e in rows:
+            title = (e.get("title") or "").lower()
+            cover.append(sum(1 for t in toks if t in title) / len(toks))
+
+    # brand-query heuristic: single token that MATCHES a channel name in the
+    # top results (case-insensitive). Pure informational single words like
+    # "python" don't match; "mrbeast" does. This is data-driven, not guesswork.
+    is_brand = False
+    if len(toks) == 1 and toks[0].isalnum() and " " not in query:
+        q_lower = query.lower()
+        for e in rows:
+            chan = (e.get("channel") or "").lower()
+            if chan and q_lower == chan.replace("@", "").replace(" ", ""):
+                is_brand = True
+                break
+
+    sig = {}  # name -> (weight, value, detail)
+    if views:
+        med = _median(views)
+        # 1k views -> 0, 10M -> 100
+        v = max(0.0, min(100.0, (math.log10(med) - 3) / 4 * 100))
+        sig["views"] = (40, v, f"median {fmt_views(int(med))} views")
+    sig["authority"] = (25, 100.0 * verified / n, f"{verified} of {n} verified")
+    if cover:
+        c = 100.0 * _median(cover)
+        if is_brand:
+            detail = "brand query — title match not meaningful"
+        elif c >= 60:
+            detail = "titles already target this query"
+        else:
+            detail = "titles barely mention the query"
+        sig["titles"] = (20, c, detail)
+    if ages:
+        med_age = _median(ages)
+        # sqrt curve: ~1 month -> 13, 1 year -> 45, 5 years -> 100
+        v = min(100.0, math.sqrt(max(med_age, 0) / 1825) * 100)
+        sig["entrenchment"] = (15, v, f"median age {_fmt_age(int(med_age))}")
+
+    if not sig:
+        return None
+    wsum = sum(w for w, _, _ in sig.values())
+    score = sum(w * v for w, v, _ in sig.values()) / wsum
+
+    floor_views = min(views) if views else None
+    beatable = sum(1 for x in views if x < 10000)
+    return {
+        "score": round(score, 1),
+        "band": _difficulty_band(score),
+        "scored": n,
+        "median_views": int(_median(views)) if views else None,
+        "verified": verified,
+        "median_age_days": int(_median(ages)) if ages else None,
+        "floor_views": floor_views,
+        "under_10k": beatable,
+        "is_brand": is_brand,
+        "signals": [{"name": k, "weight": w, "value": round(v, 1), "detail": d}
+                    for k, (w, v, d) in sig.items()],
+    }
+
+
+def _fmt_age(days):
+    if days is None:
+        return "?"
+    if days < 45:
+        return f"{days}d"
+    if days < 730:
+        return f"{days // 30}mo"
+    return f"{days // 365}y"
+
+
+def _compete_advice(s):
+    """Actionable lines derived from the score — what to actually do about it."""
+    out = []
+    if s["floor_views"] is not None:
+        out.append(f"bar to clear: #{s['scored']} in the top sits at "
+                   f"{fmt_views(s['floor_views'])} views")
+    if s["under_10k"]:
+        out.append(f"{s['under_10k']} of the top {s['scored']} have under 10K views "
+                   f"— real slots you can take")
+    by = {x["name"]: x for x in s["signals"]}
+    # don't give "exact-match title" advice for brand queries — it's the channel,
+    # not the title, that owns the query
+    if "titles" in by and by["titles"]["value"] < 50 and not s.get("is_brand"):
+        out.append("incumbent titles ignore the query — an exact-match title "
+                   "is an easy edge here")
+    if "entrenchment" in by:
+        if s["median_age_days"] is not None and s["median_age_days"] < 45:
+            out.append("results are weeks old — the SERP is churning, "
+                       "good window to enter")
+        elif by["entrenchment"]["value"] >= 70:
+            out.append("incumbents are years old and entrenched — "
+                       "you need a clearly better title, not a same-but-newer one")
+    if "authority" in by and by["authority"]["value"] >= 70:
+        out.append("the top is dominated by verified channels — "
+                   "authority matters more than usual for this query")
+    if not out:
+        out.append("balanced field — a tighter title and a stronger click-through "
+                   "rate are the way in")
+    return out
+
+
+def cmd_compete(a):
+    q = a.query.replace(":", " ").strip()
+    entries = []
+    try:
+        entries = _innertube_search(q, a.top, gl=a.gl, hl=a.hl, params=_YT_SEARCH_PARAMS)
+    except Exception as e:
+        print(f"WARNING: locale search failed ({e})", file=sys.stderr)
+    if not entries:
+        print(f"WARNING: falling back to yt-dlp — results will follow your IP, "
+              f"not gl={a.gl}", file=sys.stderr)
+        entries = dump_entries([f"ytsearch{a.top}:{q}"])
+
+    stats = _serp_stats(entries, q, top=a.top)
+    if not stats:
+        print("ERROR: no results to score", file=sys.stderr)
+        sys.exit(1)
+
+    if a.json:
+        print(json.dumps({"keyword": q, "gl": a.gl, "hl": a.hl, **stats,
+                          "advice": _compete_advice(stats)},
+                         ensure_ascii=False, indent=2))
+        return
+
+    print(f'Competition for "{q}" — top {stats["scored"]}  (gl={a.gl} hl={a.hl})\n')
+    print(f'difficulty: {stats["score"]}/100  {stats["band"]}\n')
+    wmax = max(x["weight"] for x in stats["signals"])
+    for x in stats["signals"]:
+        bar = "#" * int(round(x["value"] / 5)) + "." * (20 - int(round(x["value"] / 5)))
+        print(f'  {x["name"]:<13} {x["weight"]:>2}%  {x["value"]:>5.1f}  {bar}  {x["detail"]}')
+    print("\nwhat to do:")
+    for line in _compete_advice(stats):
+        print(f"  - {line}")
+
+
 def cmd_track(a):
     q = a.query.replace(":", " ").strip()
     entries = []
@@ -1081,8 +1305,13 @@ def cmd_track(a):
         entries = dump_entries([f"ytsearch{a.top}:{q}"])
     if not a.video:
         # no target video: just show what currently ranks (SERP view)
+        stats = _serp_stats(entries, q, top=a.top)
         if not a.json:
-            print(f'Top {min(len(entries), a.top)} for "{q}"  (gl={a.gl} hl={a.hl})\n')
+            print(f'Top {min(len(entries), a.top)} for "{q}"  (gl={a.gl} hl={a.hl})')
+            if stats:
+                print(f"competition: {stats['score']}/100  {stats['band']}  "
+                      f"({stats['verified']} of {stats['scored']} verified, "
+                      f"median {fmt_views(stats['median_views'])} views)\n")
         print_list([slim(e) for e in entries[: a.top]], a.json)
         return
 
@@ -1119,6 +1348,11 @@ def cmd_track(a):
 
     pos = f"#{rank}" if rank else f"not in top {a.top}"
     print(f'"{q}" → {pos}   (gl={a.gl} hl={a.hl})')
+    stats = _serp_stats(entries, q, top=a.top)
+    if stats and not a.json:
+        print(f"competition: {stats['score']}/100  {stats['band']}  "
+              f"({stats['verified']} of {stats['scored']} verified, "
+              f"median {fmt_views(stats['median_views'])} views)")
     if prev is None:
         print("first check — future runs will show movement")
     elif rank is None or prev is None:
@@ -1212,6 +1446,14 @@ def main():
                    help="engines to merge: yt (YouTube suggest), ddg (DuckDuckGo)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_keywords)
+
+    p = sub.add_parser("compete", help="Competition score for a keyword (0-100, from the live SERP)")
+    p.add_argument("query", help="keyword to score")
+    p.add_argument("--top", type=int, default=10, help="how many results to score")
+    p.add_argument("--gl", default="US", help="region to rank in (US, IN, GB, JP, …)")
+    p.add_argument("--hl", default="en", help="interface language (en, hi, ja, …)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_compete)
 
     p = sub.add_parser("track", help="Rank tracking — where a video sits for a keyword")
     p.add_argument("query", help="keyword to search")

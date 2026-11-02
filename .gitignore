@@ -12,3 +12,6 @@ Thumbs.db
 # Local media (source recordings — not for the repo)
 assets/*.mp4
 assets/*.mov
+
+# Scratch space for probes/tests (never committed)
+tmp/

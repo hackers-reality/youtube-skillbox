@@ -42,7 +42,7 @@ Watch the agent in action — one prompt, *"why isn't this channel growing?"* Op
 |---------|-------------|
 | [📺 Demo](#-demo) | Video walkthrough of the agent using the skills |
 | [What is this?](#what-is-this) | Overview of the two-layer architecture |
-| [📺 The `youtube` research skill](#-the-youtube-research-skill) | 12 subcommands — search, keywords, rank tracking, channels, posts, shows |
+| [📺 The `youtube` research skill](#-the-youtube-research-skill) | 13 subcommands — search, keywords, compete, rank tracking, channels, posts, shows |
 | [📜 The `transcript` skill](#-the-transcript-skill) | Free transcripts via yt-dlp |
 | [🛠 Gap-fill engine](#-when-yt-dlp-cant-do-it-we-build-it) | How we fill yt-dlp's gaps with raw scrapers |
 | [✂️ The 11 creator skills](#%EF%B8%8F-the-11-creator-skills) | Scripts, SEO, chapters, Shorts, audits, and more |
@@ -72,7 +72,7 @@ Everything is free. There is **no paid tier, no API key, and no account** anywhe
 
 ## 📺 The `youtube` research skill
 
-Twelve subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
+Thirteen subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
 
 ```bash
 python scripts/ytdata.py search "query" --limit 10     # find videos on a topic
@@ -89,7 +89,7 @@ python scripts/ytdata.py playlist "<playlist-url>"
 python scripts/ytdata.py info "<video-url-or-id>"      # views, likes, tags, date
 ```
 
-`search`, `keywords` and `track` take `--gl` / `--hl` (default `US` / `en`) to pin a
+`search`, `keywords`, `track` and `compete` take `--gl` / `--hl` (default `US` / `en`) to pin a
 region and language, so a rank position means the same thing on every machine.
 `keywords` merges two engines by default — YouTube's suggest plus DuckDuckGo's
 (`--sources yt` or `--sources ddg` to use one).
@@ -112,6 +112,7 @@ Channel: https://www.youtube.com/@MrBeast
 | `search` | Videos matching a query — title, duration, views, channel, URL (`--gl` / `--hl` locale) |
 | `keywords` | Keyword ideas from **YouTube suggest + DuckDuckGo** — a–z + pattern expansion, scored by cross-engine demand, `Y` = trending this year |
 | `track` | Where a video ranks for a keyword — with ↑↓ history across runs, kept per locale |
+| `compete` | Competition score (0–100) for a keyword — views, authority, title density, entrenchment |
 | `profile` | Channel About section — name, handle, subs, description, **all** keywords |
 | `sections` | One-call counts of every tab: videos / shorts / streams / shows / playlists / posts |
 | `home` | Home-tab shelves — featured video, Shorts, playlists, posts, **Featured Channels** (names + URLs) |

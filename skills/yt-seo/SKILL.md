@@ -37,7 +37,16 @@ current year (trending), `Q` = it is a question. Use `--gl` / `--hl` when the vi
 specific market.
 
 Take the top two or three the video can honestly deliver. The highest-scoring keyword you cannot
-answer is a bounce, not traffic. Then check where you already stand:
+answer is a bounce, not traffic. Then check the competition — this tells you if the SERP is
+penetrable or a wall:
+
+```bash
+python skills/youtube/scripts/ytdata.py compete "the keyword" --top 10
+```
+
+The score is 0–100 with a band (EASY / MEDIUM / HARD / SATURATED) and actionable advice.
+A high score means the incumbents are big, old, verified and title-dense — you need a clearly
+better video, not just a better title. Then check where you already stand:
 
 ```bash
 python skills/youtube/scripts/ytdata.py track "the keyword" --video <your video url>
