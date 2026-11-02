@@ -910,12 +910,21 @@ def cmd_profile(a):
         print(f"ERROR: {err[-1] if err else 'could not fetch channel profile'}", file=sys.stderr)
         sys.exit(1)
     d = json.loads(proc.stdout)
+    
+    # Get shorts count separately since profile doesn't include it
+    shorts_count = None
+    shorts_proc = run_ytdlp(["--skip-download", "--flat-playlist", "--dump-json", f"{base}/shorts"])
+    if shorts_proc.returncode == 0 and shorts_proc.stdout.strip():
+        shorts_count = len([ln for ln in shorts_proc.stdout.splitlines() if ln.strip().startswith("{")])
+    
+    video_count = d.get("playlist_count") or d.get("upload_count")
     payload = {
         "name": d.get("channel") or d.get("uploader"),
         "handle": d.get("id"),
         "channel_url": d.get("webpage_url") or d.get("channel_url"),
         "subscribers": d.get("channel_follower_count"),
-        "video_count": d.get("playlist_count") or d.get("upload_count"),
+        "video_count": video_count,
+        "shorts_count": shorts_count,
         "total_views": d.get("view_count"),
         "description": d.get("channel_description") or d.get("description"),
         "tags": d.get("tags"),
