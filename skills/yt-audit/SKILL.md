@@ -1,59 +1,25 @@
 ---
 name: yt-audit
-description: >-
-  Audit a YouTube channel end to end - packaging, consistency, the first
-  fifteen seconds, and what to fix first. Use for "audit my channel", "why
-  isn't my channel growing", "review my videos", or a pasted channel URL.
----**Pipeline Position:** Phase 8 — Final Synthesis (ONE fix)
-**Inputs:** ALL previous phases: youtube, transcript, yt-script, yt-package, yt-seo, yt-viral, yt-retention (optional)
-**Outputs:** Single biggest fix, 3 working things, what NOT to do → final deliverable
-**Triggers:** audit my channel, why isn't this growing, review my videos
+description: DEPRECATED — This subcommand has been removed. Use yt-workflow instead.
+---
 
+# yt-audit (DEPRECATED)
 
+This subcommand has been removed. Use the yt-workflow pipeline instead:
 
-# yt-audit
+```bash
+# Run the full pipeline manually:
+python scripts/ytdata.py sections "@handle"
+python scripts/ytdata.py channel "@handle" --limit 20 --with-duration
+python scripts/ytdata.py latest "@handle" --limit 10 --with-duration
+python scripts/ytdata.py home "@handle"
+python scripts/ytdata.py profile "@handle"
+python scripts/transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs
+python scripts/yt-script/scripts/hookscore.py "<transcript.json>" --json
+python scripts/yt-package/scripts/title.py --titles titles.txt --keyword "keyword"
+python scripts/yt-seo/scripts/ytdata.py keywords "niche" --patterns --json
+python scripts/yt-seo/scripts/ytdata.py compete "keyword" --top 10 --json
+python scripts/yt-viral/scripts/viral.py "@handle" --json
+```
 
-An audit that lists twenty problems is a way of avoiding the one that matters. This ends in ONE fix.
-
-**Agent behavior**: If yt-retention data is missing, note in audit: *"Retention analysis skipped — no Studio CSV provided. For pacing fixes, export Studio → Analytics → Engagement → Audience Retention → Download CSV and re-run."*
-
-## Prerequisites
-
-`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. The audit uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure the `youtube/scripts/ytdata.py` file exists alongside this skill** (copy the `scripts/` folder when installing skills).
-
-## Before you write
-
-1. Read `~/.claude/youtube/voice.md` if it exists. That is the user's voice profile: how they talk
-   on camera, the words they never use, who they are talking to, what they will not claim. If it
-   does not exist, ask for **three of their own videos**, read or transcribe them, infer the voice,
-   and write the file. A script in the wrong voice is worse than no script, because they have to
-   read it out loud.
-2. Never invent a number, a result or a source. If a figure would strengthen it and you do not have
-   one, ask for it or write the line without it.
-
-## What to look at, in this order
-
-1. **The last ten titles, as a set.** Read them as a list, the way the channel page shows them. Do
-   they promise different things? Run them through `../yt-package/title.py`. A channel where every
-   title is the same shape has a format problem, not a title problem.
-2. **The thumbnails, at feed size.** Shrink them. What survives? If three of them are unreadable at
-   that size, that is the fix and nothing else matters yet.
-3. **The first fifteen seconds of the three most recent.** Transcribe them and score with
-   `../yt-script/hookscore.py`. This is where most channels lose.
-4. **Upload rhythm.** Not frequency - CONSISTENCY. Six videos in one week and then nothing for a
-   month is worse than one a fortnight forever.
-5. **The retention shape**, if they can export it. `/yt-retention`.
-
-## What to hand back
-
-- The single biggest fix, named, with what to do this week.
-- Three things that are already working, so they do not break them. Be specific; "your energy is
-  good" is not an observation.
-- What NOT to do yet, and why.
-
-Never open an audit with praise you do not mean, and never end one with a list of twenty things.
-
-## The gate
-
-Nothing here publishes. This skill writes and you publish. Every output ends in a block the user
-copies, and the last line of every run is the question: **ship it, or change it?**
+See `skills/yt-workflow/SKILL.md` for the complete pipeline documentation.

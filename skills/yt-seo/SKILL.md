@@ -6,7 +6,7 @@ description: >-
   "tags", "SEO", "help this video get found", "nobody is finding this".
 ---**Pipeline Position:** Phase 5 — SEO / Keyword / Competition Audit
 **Inputs:** Keywords from youtube skill; target video from user
-**Outputs:** Keywords, competition scores, scorecards → feeds yt-audit, yt-plan
+**Outputs:** Keywords, competition scores, scorecards → feeds yt-workflow (agent synthesizes)
 **Triggers:** write description, tags, SEO, help this video get found
 
 

@@ -7,7 +7,7 @@ description: >-
   bad", packaging, or any request to rename or repackage an existing video.
 ---**Pipeline Position:** Phase 4 — Title/Thumbnail Audit
 **Inputs:** Channel titles from youtube skill; hook scores from yt-script
-**Outputs:** Title scores, thumbnail briefs → feeds yt-seo, yt-audit
+**Outputs:** Title scores, thumbnail briefs → feeds yt-seo, yt-workflow (agent synthesizes)
 **Triggers:** title ideas, thumbnail text, packaging, CTR is bad
 
 

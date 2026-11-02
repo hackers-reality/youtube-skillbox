@@ -6,7 +6,7 @@ description: "Use for YouTube research and data — free, no API key: searching 
 # YouTube Research
 
 **Pipeline Position:** Phase 1 — Data Collection
-**Outputs:** channel data (sections, videos, home, profile, latest) → feeds transcript, yt-seo, yt-viral, yt-audit
+**Outputs:** channel data (sections, videos, home, profile, latest) → feeds transcript, yt-seo, yt-viral, yt-workflow (agent synthesizes)
 **Triggers:** "search X", "analyze @channel", "what's working in niche", "channel stats"
 
 Search, browse, and analyze YouTube via local `yt-dlp` — **free, no API key, no credits, no rate limits for normal use.**

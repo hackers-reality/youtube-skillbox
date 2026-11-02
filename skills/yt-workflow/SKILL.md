@@ -1,16 +1,18 @@
 ---
 name: yt-workflow
-description: Orchestrate multi-skill YouTube audits — chains youtube → transcript → yt-script → yt-package → yt-seo → yt-viral → yt-retention → yt-audit. Use for "audit my channel", "why isn't this growing", "full channel review", "analyze competitor".
+description: Chain youtube → transcript → yt-script → yt-package → yt-seo → yt-viral → yt-retention. Use for "audit my channel", "why isn't this growing", "full channel review", "analyze competitor".
 ---
 
-# yt-workflow: The Orchestration Layer
+# yt-workflow: Channel Analysis Pipeline
 
 ## When to use
+
 Any "audit my channel" / "why isn't this growing" / "full channel review" / "analyze competitor" request.
 
 ## The Pipeline (run in order, each feeds the next)
 
 ### Phase 1: Data Collection (youtube skill)
+
 **Windows PowerShell** (run from repo root):
 ```powershell
 python ..\youtube\scripts\ytdata.py sections "@handle"
@@ -30,6 +32,7 @@ python ../youtube/scripts/ytdata.py profile "@handle"
 ```
 
 ### Phase 2: Content Extraction (transcript skill)
+
 **Windows PowerShell:**
 ```powershell
 python ..\transcript\scripts\gettranscript.py "<video_id>" --format json --all-langs
@@ -41,43 +44,41 @@ python ../transcript/scripts/gettranscript.py "<video_id>" --format json --all-l
 ```
 
 ### Phase 3: Hook Analysis (yt-script skill)
+
 ```bash
 # Score hooks from transcripts:
-python ../yt-script/scripts/hookscore.py <transcript.json>
+python ../yt-script/scripts/hookscore.py "<transcript_file.json>" --json
 ```
 
-### Phase 4: Title/Thumbnail Audit (yt-package skill)
+### Phase 4: Title/Thumbnail Analysis (yt-package skill)
+
 ```bash
 # Score titles from channel data:
-python ../yt-package/scripts/title.py --titles titles.txt
+python ../yt-package/scripts/title.py --titles titles.txt --keyword "<keyword>"
 ```
 
-### Phase 5: SEO/Keyword Audit (yt-seo skill)
+### Phase 5: SEO / Keywords (yt-seo skill)
+
 ```bash
-python ../yt-seo/scripts/ytdata.py keywords "niche" --patterns
-python ../yt-seo/scripts/ytdata.py compete "keyword" --top 10
-python ../yt-seo/scripts/ytdata.py scorecard "<video_id>" --keyword "target"
+python ../yt-seo/scripts/ytdata.py keywords "niche" --patterns --json
+python ../yt-seo/scripts/ytdata.py compete "keyword" --top 10 --json
+python ../yt-seo/scripts/ytdata.py scorecard "<video_id>" --keyword "target" --json
 ```
 
-### Phase 6: Outlier/Competitor Analysis (yt-viral skill)
+### Phase 6: Outlier / Competitor Analysis (yt-viral skill)
+
 ```bash
-python ../yt-viral/scripts/viral.py "@handle"
+python ../yt-viral/scripts/viral.py "@handle" --min-ratio 2.0 --json
 ```
 
 ### Phase 7: Retention Analysis (yt-retention skill) — OPTIONAL but HIGH-LEVERAGE
+
 ```bash
 # If user provides CSV export:
-python ../yt-retention/scripts/retention.py retention.csv
+python ../yt-retention/scripts/retention.py retention.csv --json
 ```
 
-**Agent behavior**: If no CSV provided, **ask the user to export it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip to the audit."*
-
-### Phase 8: Final Audit (yt-audit skill)
-```bash
-# Synthesize all above into the ONE fix
-```
-
-**Agent behavior**: If yt-retention data is missing, note in audit: *"Retention analysis skipped — no Studio CSV provided. For pacing fixes, export Studio → Analytics → Engagement → Audience Retention → Download CSV and re-run."*
+**Agent behavior**: If no CSV provided, **ask the user to export it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip."*
 
 ---
 
@@ -87,7 +88,7 @@ python ../yt-retention/scripts/retention.py retention.csv
 2. **Pass JSON between phases** — use `--json` flags, parse output
 3. **Fail fast** — if a phase fails, report what's missing and stop
 4. **Cache intermediates** — save JSON to temp files, pass paths forward
-5. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the audit output and continue. Don't halt the pipeline.
+5. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the output and continue. Don't halt the pipeline.
 
 ---
 
@@ -105,36 +106,49 @@ python ../yt-retention/scripts/retention.py retention.csv
 
 ---
 
----
+## Required Inputs per Phase
 
-## Required Inputs for yt-audit (Final Phase)
-
-The audit skill requires these from previous phases:
-
-| Input | Source Skill | Format |
-|-------|--------------|--------|
-| Channel data (sections, videos, home, profile) | youtube | JSON |
-| Transcripts (3 most recent videos) | transcript | JSON |
-| Hook scores (3 videos) | yt-script | JSON |
-| Title scores (last 10 videos) | yt-package | JSON |
-| Keywords + competition | yt-seo | JSON |
-| Outliers (views/subs ratio) | yt-viral | JSON |
-| Retention curves (if CSV provided) | yt-retention | JSON |
+| Phase | Skill | Input | Output |
+|-------|-------|-------|--------|
+| 1 | youtube | @handle | Channel data (sections, videos, home, profile) |
+| 2 | transcript | Top 3 video IDs | Full transcripts (JSON + timestamps) |
+| 3 | yt-script | Transcripts | Hook scores (0-100) per video |
+| 4 | yt-package | Titles + hook scores | Title/thumbnail scores + briefs |
+| 5 | yt-seo | Niche + target video | Keywords, competition scores, scorecards |
+| 6 | yt-viral | Channel + niche | Outliers (views/subs ratio), competitor gaps |
+| 7 | yt-retention | Studio CSV (optional) | Drop-off points, retention curves |
 
 ---
 
 ## Example Agent Prompt
 
 ```text
-Run a full audit on @Moments_Unscriptedorignal:
+Run a full channel analysis on @Moments_Unscriptedorignal:
 
 1. Run youtube skill: sections, channel, latest, home, profile
-2. Get transcripts for top 3 videos by views
+2. Get transcripts for top 3 videos by views (--all-langs)
 3. Run yt-script hookscore on each transcript
 4. Run yt-package title scoring on last 10 titles
 5. Run yt-seo keywords for "space facts" niche
-6. Run yt-viral outliers on channel
-7. Synthesize with yt-audit
+6. Run yt-seo compete for top keyword
+7. Run yt-viral outliers on channel
+8. Synthesize all into ONE fix, 3 working things, what NOT to do
 
 Output: single biggest fix, 3 working things, what NOT to do.
 ```
+
+---
+
+## What Each Phase Produces
+
+| Phase | Skill | Output |
+|-------|-------|--------|
+| 1 | youtube | Channel profile, videos list, sections, home tab data |
+| 2 | transcript | Transcript JSON per video |
+| 3 | yt-script | Hook score 0-100 per video |
+| 4 | yt-package | Title score 0-100 per video |
+| 5 | yt-seo | Keywords, competition score, SEO scorecard |
+| 6 | yt-viral | Outlier videos (views/subs ratio), velocity |
+| 7 | yt-retention | Retention curves, drop-off points (optional) |
+
+The agent synthesizes all phases into: **one biggest fix + 3 things working + what NOT to do.**

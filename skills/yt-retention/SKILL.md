@@ -7,7 +7,7 @@ description: >-
   my pacing".
 ---**Pipeline Position:** Phase 7 — Retention Analysis (optional)
 **Inputs:** YouTube Studio retention CSV export from user
-**Outputs:** Drop-off points, retention curves → feeds yt-audit, yt-script
+**Outputs:** Drop-off points, retention curves → feeds yt-workflow (agent synthesizes)
 **Triggers:** why do people stop watching, retention is bad, fix my pacing
 
 
@@ -30,7 +30,7 @@ python3 retention.py retention.csv --transcript transcript.srt
 Getting the file: Studio -> a video -> Analytics -> Engagement -> the audience-retention chart ->
 the download icon -> "Audience retention".
 
-**Agent behavior**: If no CSV is provided, **ask the user to export and upload it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip to the audit."*
+**Agent behavior**: If no CSV is provided, **ask the user to export and upload it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip to the final synthesis."*
 
 ## Three different problems
 

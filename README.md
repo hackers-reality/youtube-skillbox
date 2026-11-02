@@ -45,7 +45,7 @@ Watch the agent in action — one prompt, *"why isn't this channel growing?"* Op
 | [📺 The `youtube` research skill](#-the-youtube-research-skill) | 17 subcommands — search, keywords, compete, trends, track, scorecard, outliers, gap, channels, posts, shows |
 | [📜 The `transcript` skill](#-the-transcript-skill) | Free transcripts via yt-dlp |
 | [🛠 Gap-fill engine](#-when-yt-dlp-cant-do-it-we-build-it) | How we fill yt-dlp's gaps with raw scrapers |
-| [✂️ The 11 creator skills](#%EF%B8%8F-the-11-creator-skills) | Scripts, SEO, chapters, Shorts, audits, and more |
+| [✂️ The 11 creator skills](#%EF%B8%8F-the-11-creator-skills) | Scripts, SEO, chapters, Shorts, and more |
 | [📦 Install](#-install) | Quick setup for any agent harness |
 | [🤖 Have your agent set it up for you](#-have-your-agent-set-it-up-for-you) | Copy-paste prompt for any coding agent |
 | [📝 Notes & limits](#-notes--limits) | Rate limits, pagination, edge cases |
@@ -72,18 +72,17 @@ Everything is free. There is **no paid tier, no API key, and no account** anywhe
 
 ## 🔗 How the Skills Chain Together (The Pipeline)
 
-The 17 skills aren't isolated — they form an **8-phase audit pipeline** that agents can run end-to-end:
+The skills aren't isolated — they form an **7-phase analysis pipeline** that agents can run end-to-end:
 
 ```mermaid
 graph TD
-    A[User: Audit my channel] --> B[Phase 1: youtube]
+    A[User: Channel Analysis] --> B[Phase 1: youtube]
     B --> C[Phase 2: transcript]
     C --> D[Phase 3: yt-script]
     D --> E[Phase 4: yt-package]
     E --> F[Phase 5: yt-seo]
     F --> G[Phase 6: yt-viral]
     G --> H[Phase 7: yt-retention*]
-    H --> I[Phase 8: yt-audit]
     
     B --> J[Data: sections, videos, home, profile]
     C --> K[Transcripts for top 3 videos]
@@ -91,7 +90,7 @@ graph TD
     E --> M[Title/thumbnail scores]
     F --> N[Keywords, competition, scorecards]
     G --> O[Outliers, competitor gaps]
-    I --> P[ONE fix + 3 working + don't-do]
+    H --> P[ONE fix + 3 working + don't-do]
 ```
 
 *Phase 7 (yt-retention) optional — requires YouTube Studio CSV export.
@@ -105,9 +104,10 @@ graph TD
 | 5 | `yt-seo` | Niche + target video | Keywords, competition, scorecards | Search visibility |
 | 6 | `yt-viral` | Channel + niche | Outliers (VPH), competitor gaps | Growth levers |
 | 7 | `yt-retention` | Studio CSV (optional) | Drop-off points, curves | Pacing fixes |
-| 8 | `yt-audit` | **All above** | **ONE fix + 3 working + don't-do** | **Final deliverable** |
 
 **Each skill declares its pipeline position in its SKILL.md** — agents read this to know what comes before/after.
+
+**Final synthesis:** After running all phases, the agent synthesizes: **ONE biggest fix + 3 things working + what NOT to do.**
 
 ---
 
@@ -230,7 +230,6 @@ Local tools that turn raw transcripts/data into publishing artifacts:
 | `yt-shorts` | Finds the self-contained Shorts hiding inside a long video |
 | `yt-edit` | Transcript → edit decision list (dead air, fillers, retakes) |
 | `yt-retention` | Reads a Studio retention export, says where viewers leave |
-| `yt-audit` | End-to-end channel audit — packaging, consistency, first 15s |
 | `yt-viral` | What's actually working in a niche, ranked by channel-beat |
 | `yt-plan` | A week/month content calendar sized to real capacity |
 | `yt-comment` | Drafts comment replies in the creator's voice, triaged |

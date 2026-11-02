@@ -8,7 +8,7 @@ description: >-
   and does not have the first fifteen seconds yet.
 ---**Pipeline Position:** Phase 3 — Hook Analysis
 **Inputs:** Transcripts from transcript skill (Phase 2)
-**Outputs:** Hook scores (0-100) per video → feeds yt-package, yt-audit
+**Outputs:** Hook scores (0-100) per video → feeds yt-package, yt-workflow
 **Triggers:** write script, hook ideas, opening line, first 15 seconds
 
 

@@ -7,7 +7,7 @@ description: >-
   blow up", competitor research, or a swipe file.
 ---**Pipeline Position:** Phase 6 — Outlier / Competitor Analysis
 **Inputs:** Channel handle from user; niche from yt-seo
-**Outputs:** Outliers (views/subs ratio), competitor analysis → feeds yt-audit, yt-plan
+**Outputs:** Outliers (views/subs ratio), competitor analysis → feeds yt-workflow (agent synthesizes)
 **Triggers:** what's working in niche, find viral videos, why did this blow up
 
 
