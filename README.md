@@ -239,21 +239,25 @@ Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbo
    (or fetch files from GitHub if you can't clone)
 2. Install the data engine: python -m pip install --user -U yt-dlp
    (This is the ONLY runtime dependency — all skills share this one ytdata.py module)
-3. Point your agent at the skills:
-   - **OpenCode / Cursor / local agents**: skills are auto-discovered from
-     .opencode/skills/ (project) and ~/.config/opencode/skills/ (global) — already there
-   - **Claude Code / web agents**: Add the skills/ folder path in your agent's
-     settings, or copy skills/*/ to your agent's skills directory
-   - **Any agent with "add skill" UI**: Point to the skills/ folder or paste
-     individual SKILL.md files
-4. Smoke-test: run
-   python skills/youtube/scripts/ytdata.py search "rick astley" --limit 1
+3. Copy the data module to your agent's global skills directory (REQUIRED):
+   - OpenCode: cp -r skills/youtube/scripts ~/.config/opencode/skills/youtube/
+   - OpenCode: cp -r skills/transcript/scripts ~/.config/opencode/skills/transcript/
+   (The SKILL.md files reference `scripts/ytdata.py` and `scripts/gettranscript.py`
+    relative to their SKILL.md location. The scripts MUST be in the same folder structure.)
+4. Point your agent at the skills:
+   - **OpenCode / Cursor / local agents**: skills auto-discovered from
+     .opencode/skills/ (project) and ~/.config/opencode/skills/ (global)
+   - **Claude Code / web agents**: Add the skills/ folder path in settings,
+     or copy skills/*/ to your agent's skills directory
+   - **Any agent with "add skill" UI**: Point to skills/ folder or paste SKILL.md files
+5. Smoke-test: run
+   python ~/.config/opencode/skills/youtube/scripts/ytdata.py search "rick astley" --limit 1
    (should return 1 video with title, views, channel, URL)
-5. Ask your agent: "List all 13 YouTube skills and when to use each"
+6. Ask your agent: "List all 13 YouTube skills and when to use each"
    It should read each skills/*/SKILL.md and answer from there.
 ```
 
-**Important**: All 13 skills (youtube, transcript, 11 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. That file must stay in the repo — the skills reference it via relative paths like `python skills/youtube/scripts/ytdata.py ...`. If you move skills elsewhere, update the paths in the SKILL.md files or install globally with `pip install -e .` (then `ytdata` works from anywhere).
+**Important**: All 13 skills (youtube, transcript, 11 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. The skills reference it via relative paths (`scripts/ytdata.py` from SKILL.md). You **must** copy the `scripts/` folder alongside each skill's SKILL.md in your agent's skills directory (step 3 above). Or install globally with `pip install -e .` (then `ytdata` works from anywhere).
 
 ---
 

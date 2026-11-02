@@ -7,6 +7,12 @@ description: >-
   blow up", competitor research, or a swipe file.
 ---
 
+# 
+
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 # yt-viral
 
 Raw view counts rank channel size, not ideas. This ranks by **multiple over each channel's own

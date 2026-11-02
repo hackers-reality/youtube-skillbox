@@ -7,6 +7,12 @@ description: >-
   make next".
 ---
 
+# 
+
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 # yt-plan
 
 A plan that does not fit the week is a list of regrets. Ask two questions before writing anything:

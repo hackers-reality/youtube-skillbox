@@ -6,6 +6,12 @@ description: >-
   comment section", "someone asked X", or a pasted comment thread.
 ---
 
+# 
+
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 # yt-comment
 
 The comment section is a retention surface, not a chore. Replies in the first few hours are what

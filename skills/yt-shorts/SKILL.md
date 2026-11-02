@@ -6,6 +6,12 @@ description: >-
   "clip this", "repurpose this video", "what should I clip".
 ---
 
+# 
+
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 # yt-shorts
 
 A Short cut out of a long video is not a clip of the best moment. It is a moment that **survives

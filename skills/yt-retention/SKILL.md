@@ -7,6 +7,12 @@ description: >-
   my pacing".
 ---
 
+# 
+
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 # yt-retention
 
 The retention graph is the only honest feedback YouTube gives you. Almost nobody exports it.

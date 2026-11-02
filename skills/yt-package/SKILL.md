@@ -7,6 +7,12 @@ description: >-
   bad", packaging, or any request to rename or repackage an existing video.
 ---
 
+# 
+
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 # yt-package
 
 The title and the thumbnail are ONE unit. Writing them separately is why most packaging fails: the

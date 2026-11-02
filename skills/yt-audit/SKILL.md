@@ -10,6 +10,10 @@ description: >-
 
 An audit that lists twenty problems is a way of avoiding the one that matters. This ends in ONE fix.
 
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. The audit uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure the `youtube/scripts/ytdata.py` file exists alongside this skill** (copy the `scripts/` folder when installing skills).
+
 ## Before you write
 
 1. Read `~/.claude/youtube/voice.md` if it exists. That is the user's voice profile: how they talk

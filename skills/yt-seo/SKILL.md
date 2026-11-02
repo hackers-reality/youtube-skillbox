@@ -11,6 +11,10 @@ description: >-
 Search is a smaller lever than packaging and a bigger one than people think for evergreen videos.
 For a video aimed at the subscriber feed, say so and spend the effort on `/yt-package` instead.
 
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 ## Before you write
 
 1. Read `~/.claude/youtube/voice.md` if it exists. That is the user's voice profile: how they talk

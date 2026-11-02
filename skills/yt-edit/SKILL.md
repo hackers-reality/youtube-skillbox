@@ -7,6 +7,12 @@ description: >-
   footage from a transcript.
 ---
 
+# 
+
+## Prerequisites
+
+`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
+
 # yt-edit
 
 An edit decision list from a timestamped transcript. It prints the cuts. You apply them.
