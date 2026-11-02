@@ -74,24 +74,24 @@ Everything is free. There is **no paid tier, no API key, and no account** anywhe
 
 The 17 skills aren't isolated — they form an **8-phase audit pipeline** that agents can run end-to-end:
 
-```mermaid
-graph TD
-    A[User: "Audit my channel"] --> B[Phase 1: youtube]
-    B --> C[Phase 2: transcript]
-    C --> D[Phase 3: yt-script]
-    D --> E[Phase 4: yt-package]
-    E --> F[Phase 5: yt-seo]
-    F --> G[Phase 6: yt-viral]
-    G --> H[Phase 7: yt-retention*]
-    H --> I[Phase 8: yt-audit]
-    
-    B --> J[Data: sections, videos, home, profile]
-    C --> K[Transcripts for top 3 videos]
-    D --> L[Hook scores (0-100)]
-    E --> M[Title/thumbnail scores]
-    F --> N[Keywords, competition, scorecards]
-    G --> O[Outliers, competitor analysis]
-    I --> P[ONE fix + 3 working + what NOT to do]
+```
+User: "Audit my channel"
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 1: youtube     → Channel data (sections, videos, home)  │
+│  Phase 2: transcript  → Full transcripts (top 3 videos)        │
+│  Phase 3: yt-script   → Hook scores (0-100) per video          │
+│  Phase 4: yt-package  → Title/thumbnail scores + briefs        │
+│  Phase 5: yt-seo      → Keywords, competition, scorecards      │
+│  Phase 6: yt-viral    → Outliers (VPH), competitor gaps        │
+│  Phase 7: yt-retention* → Retention curves (optional)          │
+└─────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 8: yt-audit    → ONE fix + 3 working + what NOT to do   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 *Phase 7 (yt-retention) optional — requires YouTube Studio CSV export.
