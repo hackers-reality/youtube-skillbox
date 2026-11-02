@@ -53,10 +53,13 @@ def normalize_id(url_or_id):
     return s  # let yt-dlp figure it out
 
 
-def fetch_subtitle_files(vid, langs):
+def fetch_subtitle_files(vid, langs, all_langs=False):
     """Download subtitle json3 files to a temp dir. Returns (list_of_paths, used_lang)."""
     tmpdir = tempfile.mkdtemp(prefix="ytdlp_")
-    langspec = ",".join(langs) + ".*"
+    if all_langs:
+        langspec = "all"
+    else:
+        langspec = ",".join(langs) + ".*"
     args = [
         "--skip-download",
         "--write-subs",
@@ -76,8 +79,11 @@ def fetch_subtitle_files(vid, langs):
         hint = err[-1] if err else "no subtitle track found"
         die(f"Could not fetch a transcript for {vid}. {hint}\n"
             f"The video may have captions disabled, be private/age-restricted, "
-            f"or not have any of: {', '.join(langs)}")
+            f"or not have any of: {', '.join(langs) if not all_langs else 'any language'}")
 
+    if all_langs:
+        return files, None
+    
     # Prefer exact-language matches (e.g. '.en.json3') over translated ('.en-de.json3').
     def rank(path):
         name = os.path.basename(path)
@@ -165,6 +171,8 @@ def main():
                     help="Output format (default: text)")
     ap.add_argument("--lang", default="en",
                     help="Comma-separated language priority list (default: en)")
+    ap.add_argument("--all-langs", action="store_true",
+                    help="Fetch ALL available subtitle tracks (manual + auto) and return all in JSON")
     ap.add_argument("--no-meta", action="store_true", help="Skip metadata lookup (faster)")
     args = ap.parse_args()
 
@@ -175,6 +183,35 @@ def main():
 
     vid = normalize_id(args.url)
     langs = [l.strip() for l in args.lang.split(",") if l.strip()]
+
+    if args.all_langs:
+        files, _ = fetch_subtitle_files(vid, langs, all_langs=True)
+        if not files:
+            die("No subtitle tracks found for this video.")
+        
+        all_transcripts = []
+        for subfile in files:
+            segs = parse_json3(subfile)
+            if not segs:
+                continue
+            all_transcripts.append({
+                "language": guess_lang(subfile),
+                "generated": is_generated(subfile),
+                "segment_count": len(segs),
+                "transcript": segs,
+            })
+        
+        if not all_transcripts:
+            die("Transcript files were empty — the tracks may have no text cues.")
+        
+        meta = {} if args.no_meta else fetch_metadata(vid)
+        payload = {
+            "video_id": vid,
+            "transcripts": all_transcripts,
+            "metadata": meta or None,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
 
     _, subfile = fetch_subtitle_files(vid, langs)
     segs = parse_json3(subfile)
