@@ -30,6 +30,7 @@ python scripts/gettranscript.py "<url-or-id>"                    # clean text (d
 python scripts/gettranscript.py "<url-or-id>" --format stamped   # [MM:SS] per line
 python scripts/gettranscript.py "<url-or-id>" --format json      # structured + metadata
 python scripts/gettranscript.py "<url-or-id>" --lang es,es-419   # language priority list
+python scripts/gettranscript.py "<url-or-id>" --all-langs        # fetch ALL available tracks
 python scripts/gettranscript.py "<url-or-id>" --no-meta          # skip metadata (faster)
 ```
 
@@ -63,6 +64,11 @@ The script accepts a full URL, `youtu.be/ID`, `youtube.com/shorts/ID`, or a bare
 ## Language
 
 `--lang` is a **priority list**, first available wins. Default is `en`. For a Spanish video use `--lang es,es-419,en`. To translate, fetch then translate the text yourself — this tool returns the caption track as-is, it does not machine-translate.
+
+**Multi-language support**: Use `--all-langs` to fetch **every available subtitle track** (manual + auto-generated). Returns a JSON array of transcripts with language metadata. Use this when:
+- Video may have non-English original language (e.g., Marathi `mr-orig`)
+- Auto-translated English is poor quality
+- You want to compare translations for accuracy
 
 ## Behavior & limits
 

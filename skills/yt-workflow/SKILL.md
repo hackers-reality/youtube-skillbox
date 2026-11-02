@@ -21,8 +21,8 @@ python ../youtube/scripts/ytdata.py profile "@handle"
 
 ### Phase 2: Content Extraction (transcript skill)
 ```bash
-# For each of the 3 most recent videos:
-python ../transcript/scripts/gettranscript.py "<video_id>" --format json
+# For each of the 3 most recent videos — USE --all-langs to catch non-English originals:
+python ../transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs
 ```
 
 ### Phase 3: Hook Analysis (yt-script skill)
@@ -49,16 +49,20 @@ python ../yt-seo/scripts/ytdata.py scorecard "<video_id>" --keyword "target"
 python ../yt-viral/scripts/viral.py "@handle"
 ```
 
-### Phase 7: Retention Analysis (yt-retention skill)
+### Phase 7: Retention Analysis (yt-retention skill) — OPTIONAL but HIGH-LEVERAGE
 ```bash
 # If user provides CSV export:
 python ../yt-retention/scripts/retention.py retention.csv
 ```
 
+**Agent behavior**: If no CSV provided, **ask the user to export it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip to the audit."*
+
 ### Phase 8: Final Audit (yt-audit skill)
 ```bash
 # Synthesize all above into the ONE fix
 ```
+
+**Agent behavior**: If yt-retention data is missing, note in audit: *"Retention analysis skipped — no Studio CSV provided. For pacing fixes, export Studio → Analytics → Engagement → Audience Retention → Download CSV and re-run."*
 
 ---
 
@@ -68,6 +72,7 @@ python ../yt-retention/scripts/retention.py retention.csv
 2. **Pass JSON between phases** — use `--json` flags, parse output
 3. **Fail fast** — if a phase fails, report what's missing and stop
 4. **Cache intermediates** — save JSON to temp files, pass paths forward
+5. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the audit output and continue. Don't halt the pipeline.
 
 ---
 
