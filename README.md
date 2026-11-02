@@ -24,7 +24,7 @@
 
 ## 📺 Demo
 
-Watch the agent in action — OpenCode fetching MKBHD's full channel breakdown (tab counts, home shelves with Featured Channels URLs, paginated community posts, and a timestamped transcript):
+Watch the agent in action — one prompt, *"why isn't this channel growing?"* OpenCode researches the videos, Shorts and transcripts, then surfaces the hooks, scripts and what to fix (why one Short hit 8K views while the rest couldn't pass 1K):
 
 <div align="center">
   <a href="https://www.youtube.com/watch?v=y9U_ZeJ713M" target="_blank">
