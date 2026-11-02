@@ -30,6 +30,8 @@ python3 retention.py retention.csv --transcript transcript.srt
 Getting the file: Studio -> a video -> Analytics -> Engagement -> the audience-retention chart ->
 the download icon -> "Audience retention".
 
+**Agent behavior**: If no CSV is provided, **ask the user to export and upload it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip to the audit."*
+
 ## Three different problems
 
 - **HOOK LEAK** - what is lost in the first 30 seconds. Under 25% is healthy. This is always the

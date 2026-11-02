@@ -5,7 +5,7 @@ description: >-
   fifteen seconds, and what to fix first. Use for "audit my channel", "why
   isn't my channel growing", "review my videos", or a pasted channel URL.
 ---**Pipeline Position:** Phase 8 — Final Synthesis (ONE fix)
-**Inputs:** ALL previous phases: youtube, transcript, yt-script, yt-package, yt-seo, yt-viral, yt-retention
+**Inputs:** ALL previous phases: youtube, transcript, yt-script, yt-package, yt-seo, yt-viral, yt-retention (optional)
 **Outputs:** Single biggest fix, 3 working things, what NOT to do → final deliverable
 **Triggers:** audit my channel, why isn't this growing, review my videos
 
@@ -14,6 +14,8 @@ description: >-
 # yt-audit
 
 An audit that lists twenty problems is a way of avoiding the one that matters. This ends in ONE fix.
+
+**Agent behavior**: If yt-retention data is missing, note in audit: *"Retention analysis skipped — no Studio CSV provided. For pacing fixes, export Studio → Analytics → Engagement → Audience Retention → Download CSV and re-run."*
 
 ## Prerequisites
 

@@ -281,8 +281,10 @@ Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbo
 2. Install the data engine: python -m pip install --user -U yt-dlp
    (This is the ONLY runtime dependency — all skills share this one ytdata.py module)
 3. Copy the data module to your agent's global skills directory (REQUIRED):
-   - OpenCode: cp -r skills/youtube/scripts ~/.config/opencode/skills/youtube/
-   - OpenCode: cp -r skills/transcript/scripts ~/.config/opencode/skills/transcript/
+   - Linux/macOS: cp -r skills/youtube/scripts ~/.config/opencode/skills/youtube/
+   - Linux/macOS: cp -r skills/transcript/scripts ~/.config/opencode/skills/transcript/
+   - Windows: xcopy skills\youtube\scripts %USERPROFILE%\.config\opencode\skills\youtube\ /E /I
+   - Windows: xcopy skills\transcript\scripts %USERPROFILE%\.config\opencode\skills\transcript\ /E /I
    (The SKILL.md files reference `scripts/ytdata.py` and `scripts/gettranscript.py`
     relative to their SKILL.md location. The scripts MUST be in the same folder structure.)
 4. Point your agent at the skills:
