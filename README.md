@@ -230,25 +230,30 @@ Restart the agent session; the skills are auto-discovered by their `description`
 
 ## 🤖 Have your agent set it up for you
 
-Don't want to install by hand? Paste this into any coding agent that can read files — **Claude Code, OpenCode, or whatever you use**:
+Don't want to install by hand? Paste this into any coding agent that can read files — **Claude Code, OpenCode, Cursor, or any agent with skill discovery**:
 
 ```text
 Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbox
 
 1. Get the repo: git clone https://github.com/hackers-reality/youtube-skillbox.git
-   (if you can't clone, fetch the files from the GitHub page instead)
-2. Copy every folder inside its skills/ directory into my agent's skills
-   directory (the folder where you discover SKILL.md files — for OpenCode
-   that's ~/.config/opencode/skills; if you use a different one, use yours
-   and tell me which path you chose).
-3. Make sure the data engine is installed: python -m pip install --user -U yt-dlp
-4. Smoke-test it: run
-   python <skills-dir>/youtube/scripts/ytdata.py search "rick astley" --limit 1
-   and show me the output.
-5. Then list the 13 skills you can now use (youtube, transcript, and the
-   11 yt-* ones) with one line each on when you'd use them.
-   Read each skills/*/SKILL.md for the details — don't ask me, infer from those.
+   (or fetch files from GitHub if you can't clone)
+2. Install the data engine: python -m pip install --user -U yt-dlp
+   (This is the ONLY runtime dependency — all skills share this one ytdata.py module)
+3. Point your agent at the skills:
+   - **OpenCode / Cursor / local agents**: skills are auto-discovered from
+     .opencode/skills/ (project) and ~/.config/opencode/skills/ (global) — already there
+   - **Claude Code / web agents**: Add the skills/ folder path in your agent's
+     settings, or copy skills/*/ to your agent's skills directory
+   - **Any agent with "add skill" UI**: Point to the skills/ folder or paste
+     individual SKILL.md files
+4. Smoke-test: run
+   python skills/youtube/scripts/ytdata.py search "rick astley" --limit 1
+   (should return 1 video with title, views, channel, URL)
+5. Ask your agent: "List all 13 YouTube skills and when to use each"
+   It should read each skills/*/SKILL.md and answer from there.
 ```
+
+**Important**: All 13 skills (youtube, transcript, 11 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. That file must stay in the repo — the skills reference it via relative paths like `python skills/youtube/scripts/ytdata.py ...`. If you move skills elsewhere, update the paths in the SKILL.md files or install globally with `pip install -e .` (then `ytdata` works from anywhere).
 
 ---
 
