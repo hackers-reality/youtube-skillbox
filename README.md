@@ -49,6 +49,7 @@ Watch the agent in action — one prompt, *"why isn't this channel growing?"* Op
 | [📦 Install](#-install) | Quick setup for any agent harness |
 | [🤖 Have your agent set it up for you](#-have-your-agent-set-it-up-for-you) | Copy-paste prompt for any coding agent |
 | [📝 Notes & limits](#-notes--limits) | Rate limits, pagination, edge cases |
+| [⚖️ Responsible use](#%EF%B8%8F-responsible-use) | Personal vs commercial use, risk notes |
 | [📄 License](#-license) | MIT License |
 | [🙏 Credits](#-credits) | yt-dlp, upstream skill sources |
 
@@ -238,6 +239,16 @@ Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbo
 - `sections` shows `N+` for community counts when more pages exist (exact when they fit on page 1).
 - Flat list view counts can show `?` occasionally — use `info` on a specific video for exact numbers.
 - Private / age-restricted / deleted targets fail with a clear message instead of silence.
+
+## ⚖️ Responsible use
+
+This project reads publicly available YouTube data directly from the web rather than through the official API — strictly outside what YouTube's Terms of Service permit, even though that's common practice for personal tools like this.
+
+- **Personal use** — read-only public data, no login, low volume: low risk. Keep it that way.
+- **Commercial or high-volume use** — not recommended. Scaling it up, reselling data, or hammering YouTube meaningfully raises the risk of rate-limits, IP blocks, or takedown requests.
+- Never point it at private, age-restricted, or members-only content — the tools intentionally fail instead of bypassing.
+
+Use it at your own risk; this project is not affiliated with YouTube or Google. The code itself stays MIT-licensed — this section is guidance about how you use it against YouTube, not a restriction on the code.
 
 ## 📄 License
 
