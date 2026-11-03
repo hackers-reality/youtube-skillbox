@@ -40,3 +40,21 @@ def test_find_skills_dir_falls_back_to_source_checkout(tmp_path, monkeypatch):
     monkeypatch.setattr(cli.sysconfig, "get_preferred_scheme", lambda name: "user")
 
     assert cli.find_skills_dir() == str(engine_dir)
+
+
+def test_find_skills_dir_works_without_installed_distribution(tmp_path, monkeypatch):
+    package_dir = tmp_path / "repo" / "youtube_skillbox"
+    package_dir.mkdir(parents=True)
+    engine_dir = tmp_path / "repo" / "skills" / "youtube" / "scripts"
+    engine_dir.mkdir(parents=True)
+    (engine_dir / "ytdata.py").write_text("def main(): pass\\n", encoding="utf-8")
+
+    def missing_distribution(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(importlib.metadata, "distribution", missing_distribution)
+    monkeypatch.setattr(cli, "__file__", str(package_dir / "cli.py"))
+    monkeypatch.setattr(cli.sysconfig, "get_path", lambda *args, **kwargs: str(tmp_path / "wrong"))
+    monkeypatch.setattr(cli.sysconfig, "get_preferred_scheme", lambda name: "user")
+
+    assert cli.find_skills_dir() == str(engine_dir)
