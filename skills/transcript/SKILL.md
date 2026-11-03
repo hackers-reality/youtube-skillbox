@@ -88,7 +88,7 @@ python scripts/gettranscript.py "<url-or-id>" --lang mr,en
 ## Behavior & limits
 
 - Prefers manual captions, falls back to auto-generated.
-- **No credits, no rate limit for normal use** — but YouTube may throttle (HTTP 429) if you hammer it; add a small delay between many videos.
+- **No credits, no user-supplied YouTube Data API key** — but YouTube may throttle (HTTP 429) if you hammer it; add a small delay between many videos.
 - Fails (with a clear message) if: captions disabled, private, age-restricted, or none of your requested languages exist.
 - Speed: a few seconds per video (local tool startup). Fine for occasional use; for bulk, expect ~1–2s each.
 

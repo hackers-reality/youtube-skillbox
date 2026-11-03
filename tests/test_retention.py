@@ -46,7 +46,7 @@ class TestParseRetentionCSV(unittest.TestCase):
         self.assertEqual(points[0]["time_seconds"], 0)
         self.assertEqual(points[1]["time_seconds"], 30)
         self.assertEqual(points[2]["time_seconds"], 60)
-        self.assertTrue(points[0].get("time_is_pct", False))
+        self.assertTrue(points[0].get("original_time_is_pct", False))
 
     def test_percentage_position_without_duration(self):
         """Percentage positions should stay as percentages when no --duration."""
@@ -65,7 +65,7 @@ class TestParseRetentionCSV(unittest.TestCase):
         self.assertEqual(points[0]["time_seconds"], 0)
         self.assertEqual(points[1]["time_seconds"], 50)
         self.assertEqual(points[2]["time_seconds"], 100)
-        self.assertTrue(points[0].get("time_is_pct", False))
+        self.assertTrue(points[0].get("original_time_is_pct", False))
 
     def test_seconds_based_positions_hhmmss(self):
         """HH:MM:SS format should parse to seconds."""
@@ -83,7 +83,7 @@ class TestParseRetentionCSV(unittest.TestCase):
         self.assertEqual(points[0]["time_seconds"], 0)
         self.assertEqual(points[1]["time_seconds"], 30)
         self.assertEqual(points[2]["time_seconds"], 60)
-        self.assertFalse(points[0].get("time_is_pct", True))
+        self.assertFalse(points[0].get("original_time_is_pct", True))
 
     def test_seconds_based_positions_mmss(self):
         """MM:SS format should parse to seconds."""
@@ -209,10 +209,10 @@ class TestDetectHookLeak(unittest.TestCase):
     def test_percentage_mode(self):
         """Hook leak with percentage positions (first 30%)."""
         points = [
-            {"time_seconds": 0, "retention_pct": 100, "time_is_pct": True},
-            {"time_seconds": 10, "retention_pct": 80, "time_is_pct": True},
-            {"time_seconds": 30, "retention_pct": 70, "time_is_pct": True},
-            {"time_seconds": 50, "retention_pct": 60, "time_is_pct": True},
+            {"time_seconds": 0, "retention_pct": 100, "original_time_is_pct": True},
+            {"time_seconds": 10, "retention_pct": 80, "original_time_is_pct": True},
+            {"time_seconds": 30, "retention_pct": 70, "original_time_is_pct": True},
+            {"time_seconds": 50, "retention_pct": 60, "original_time_is_pct": True},
         ]
         result = retention.detect_hook_leak(points)
         self.assertEqual(result["time_unit"], "%")
@@ -224,9 +224,9 @@ class TestDetectHookLeak(unittest.TestCase):
     def test_seconds_mode(self):
         """Hook leak with seconds (first 30s)."""
         points = [
-            {"time_seconds": 0, "retention_pct": 100, "time_is_pct": False},
-            {"time_seconds": 10, "retention_pct": 80, "time_is_pct": False},
-            {"time_seconds": 30, "retention_pct": 70, "time_is_pct": False},
+            {"time_seconds": 0, "retention_pct": 100, "original_time_is_pct": False},
+            {"time_seconds": 10, "retention_pct": 80, "original_time_is_pct": False},
+            {"time_seconds": 30, "retention_pct": 70, "original_time_is_pct": False},
         ]
         result = retention.detect_hook_leak(points)
         self.assertEqual(result["time_unit"], "s")
@@ -236,8 +236,8 @@ class TestDetectHookLeak(unittest.TestCase):
     def test_no_early_data_percentage(self):
         """No points in first 30% should return unknown."""
         points = [
-            {"time_seconds": 50, "retention_pct": 50, "time_is_pct": True},
-            {"time_seconds": 100, "retention_pct": 30, "time_is_pct": True},
+            {"time_seconds": 50, "retention_pct": 50, "original_time_is_pct": True},
+            {"time_seconds": 100, "retention_pct": 30, "original_time_is_pct": True},
         ]
         result = retention.detect_hook_leak(points)
         self.assertEqual(result["severity"], "unknown")
@@ -246,8 +246,8 @@ class TestDetectHookLeak(unittest.TestCase):
     def test_no_early_data_seconds(self):
         """No points in first 30s should return unknown."""
         points = [
-            {"time_seconds": 40, "retention_pct": 50, "time_is_pct": False},
-            {"time_seconds": 60, "retention_pct": 30, "time_is_pct": False},
+            {"time_seconds": 40, "retention_pct": 50, "original_time_is_pct": False},
+            {"time_seconds": 60, "retention_pct": 30, "original_time_is_pct": False},
         ]
         result = retention.detect_hook_leak(points)
         self.assertEqual(result["severity"], "unknown")

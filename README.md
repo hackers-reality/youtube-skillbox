@@ -15,7 +15,7 @@
   <a href="#-the-youtube-research-skill">Research</a> ·
   <a href="#-the-transcript-skill">Transcripts</a> ·
   <a href="#-when-yt-dlp-cant-do-it-we-build-it">Gap-fill engine</a> ·
-  <a href="#%EF%B8%8F-the-11-creator-skills">Creator tools</a> ·
+  <a href="#%EF%B8%8F-the-10-creator-skills">Creator tools</a> ·
   <a href="#-install">Install</a> ·
   <a href="#-have-your-agent-set-it-up-for-you">Agent prompt</a>
 </p>
@@ -299,7 +299,7 @@ Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbo
    It should read each skills/*/SKILL.md and answer from there.
 ```
 
-**Important**: All 13 skills (youtube, transcript, 11 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. The skills reference it via relative paths (`scripts/ytdata.py` from SKILL.md). You **must** copy the `scripts/` folder alongside each skill's SKILL.md in your agent's skills directory (step 3 above). Or install globally with `pip install -e .` (then `ytdata` works from anywhere).
+**Important**: All 13 skills (youtube, transcript, 10 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. The skills reference it via relative paths (`scripts/ytdata.py` from SKILL.md). You **must** copy the `scripts/` folder alongside each skill's SKILL.md in your agent's skills directory (step 3 above). Or install globally with `pip install -e .` (then `ytdata` works from anywhere).
 
 ---
 

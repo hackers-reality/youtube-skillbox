@@ -1,0 +1,2 @@
+[console_scripts]
+ytdata = youtube_skillbox.cli:main

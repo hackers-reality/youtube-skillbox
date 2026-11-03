@@ -9,7 +9,7 @@ description: "Use for YouTube research and data — free, no API key: searching 
 **Outputs:** channel data (sections, videos, home, profile, latest) → feeds transcript, yt-seo, yt-viral, yt-workflow (agent synthesizes)
 **Triggers:** "search X", "analyze @channel", "what's working in niche", "channel stats"
 
-Search, browse, and analyze YouTube via local `yt-dlp` — **free, no API key, no credits, no rate limits for normal use.**
+Search, browse, and analyze YouTube via local `yt-dlp` — **free, no user-supplied YouTube Data API key, no credits**. YouTube may throttle (HTTP 429) if you hammer it; add a small delay between calls.
 
 ## Prerequisites
 

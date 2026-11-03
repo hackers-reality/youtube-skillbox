@@ -1,0 +1,13 @@
+LICENSE
+README.md
+setup.py
+ytdata.py
+skills/youtube/scripts/ytdata.py
+youtube_skillbox/__init__.py
+youtube_skillbox/cli.py
+youtube_skillbox.egg-info/PKG-INFO
+youtube_skillbox.egg-info/SOURCES.txt
+youtube_skillbox.egg-info/dependency_links.txt
+youtube_skillbox.egg-info/entry_points.txt
+youtube_skillbox.egg-info/requires.txt
+youtube_skillbox.egg-info/top_level.txt

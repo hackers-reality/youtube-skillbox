@@ -71,7 +71,7 @@ def parse_retention_csv(csv_path: str, video_duration_seconds: float = None) -> 
     
     # Parse data points
     points = []
-    time_is_pct = False
+    original_time_is_pct = False  # Track original format before conversion
     for row in rows:
         try:
             time_val = row[time_col]
@@ -82,7 +82,7 @@ def parse_retention_csv(csv_path: str, video_duration_seconds: float = None) -> 
                 # Percentage of video (0-100) - convert to seconds if duration known
                 try:
                     pct = float(time_val)
-                    time_is_pct = True
+                    original_time_is_pct = True
                     if video_duration_seconds:
                         seconds = (pct / 100.0) * video_duration_seconds
                     else:
@@ -90,11 +90,11 @@ def parse_retention_csv(csv_path: str, video_duration_seconds: float = None) -> 
                 except ValueError:
                     continue
             retention = float(row[retention_col].replace('%', '').replace(',', ''))
-            points.append({"time_seconds": seconds, "retention_pct": retention, "time_is_pct": time_is_pct})
+            points.append({"time_seconds": seconds, "retention_pct": retention, "original_time_is_pct": original_time_is_pct})
         except (ValueError, KeyError):
             continue
     
-    return {"points": points, "raw_rows": len(rows), "time_is_pct": time_is_pct}
+    return {"points": points, "raw_rows": len(rows), "original_time_is_pct": original_time_is_pct}
 
 
 def parse_time_to_seconds(time_str: str) -> float:
@@ -122,10 +122,11 @@ def parse_time_to_seconds(time_str: str) -> float:
 def detect_hook_leak(points: List[Dict]) -> Dict:
     """Detect hook leak (first 30% of video or first 30 seconds)."""
     if not points:
-        return {"leak_pct": 0, "severity": "unknown", "details": "No data", "start_retention": 0, "min_early_retention": 0}
+        return {"leak_pct": 0, "severity": "unknown", "details": "No data", "start_retention": 0, "min_early_retention": 0, "time_unit": "s", "time_desc": "30s"}
     
     # Check if time is in percentage (0-100) or seconds
-    time_is_pct = points[0].get("time_is_pct", False)
+    # Use original_time_is_pct to determine the original unit
+    time_is_pct = points[0].get("original_time_is_pct", False)
     
     if time_is_pct:
         # First 30% of video
