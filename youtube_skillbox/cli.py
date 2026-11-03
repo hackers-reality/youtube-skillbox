@@ -24,7 +24,7 @@ def _installed_engine_candidates():
     avoiding assumptions about sys.prefix or platform-specific install paths.
     """
     try:
-        from importlib.metadata import distribution
+        from importlib.metadata import PackageNotFoundError, distribution
 
         dist = distribution("youtube-skillbox")
         for entry in dist.files or ():
@@ -33,7 +33,7 @@ def _installed_engine_candidates():
                 "share/youtube-skillbox/skills/youtube/scripts/ytdata.py"
             ):
                 yield str(dist.locate_file(entry).parent)
-    except (ImportError, OSError, ValueError):
+    except (ImportError, PackageNotFoundError, OSError, ValueError):
         pass
 
     # Compatibility fallback for older metadata implementations / installs.
