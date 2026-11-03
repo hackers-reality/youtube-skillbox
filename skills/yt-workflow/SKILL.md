@@ -5,6 +5,28 @@ description: Chain youtube → transcript → yt-script → yt-package → yt-se
 
 # yt-workflow: Channel Analysis Pipeline
 
+## ⚡ Quick Start: Installed CLI
+
+After installing the package (`pip install -e .`), the **`ytdata`** command is available globally. Use it directly instead of `python skills/youtube/scripts/ytdata.py`:
+
+```bash
+# Before (repo-root relative paths)
+python skills/youtube/scripts/ytdata.py sections "@handle"
+
+# After install (works from anywhere)
+ytdata sections "@handle"
+ytdata channel "@handle" --limit 20 --with-duration
+ytdata latest "@handle" --limit 10 --with-duration
+ytdata home "@handle"
+ytdata profile "@handle"
+ytdata keywords "niche" --patterns --json
+ytdata compete "keyword" --top 10 --json
+ytdata scorecard "<video_id>" --keyword "target" --json
+ytdata outliers "@handle" --min-ratio 2.0 --tab all --json
+```
+
+> **Note:** The examples below use `python skills/youtube/scripts/ytdata.py` for repo-root execution. After `pip install -e .`, prefer the `ytdata` command — it works from any directory.
+
 ## When to use
 
 Any "audit my channel" / "why isn't this growing" / "full channel review" / "analyze competitor" request.
@@ -26,9 +48,9 @@ python skills\youtube\scripts\ytdata.py profile "@handle"
 ```bash
 python skills/youtube/scripts/ytdata.py sections "@handle"
 python skills/youtube/scripts/ytdata.py channel "@handle" --limit 20 --with-duration
-python skills/youtube/scripts/ytdata.py latest "@handle" --limit 10 --with-duration
-python skills/youtube/scripts/ytdata.py home "@handle"
-python skills/youtube/scripts/ytdata.py profile "@handle"
+python skills/youtube/scripts\ytdata.py latest "@handle" --limit 10 --with-duration
+python skills/youtube/scripts\ytdata.py home "@handle"
+python skills/youtube/scripts\ytdata.py profile "@handle"
 ```
 
 ### Phase 2: Content Extraction (transcript skill)
