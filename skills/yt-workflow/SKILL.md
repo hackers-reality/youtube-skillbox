@@ -57,18 +57,20 @@ python ../yt-script/scripts/hookscore.py "<transcript_file.json>" --json
 python ../yt-package/scripts/title.py --titles titles.txt --keyword "<keyword>"
 ```
 
-### Phase 5: SEO / Keywords (yt-seo skill)
+### Phase 5: SEO / Keywords (youtube skill)
 
 ```bash
-python ../yt-seo/scripts/ytdata.py keywords "niche" --patterns --json
-python ../yt-seo/scripts/ytdata.py compete "keyword" --top 10 --json
-python ../yt-seo/scripts/ytdata.py scorecard "<video_id>" --keyword "target" --json
+python ../youtube/scripts/ytdata.py keywords "niche" --patterns --json
+python ../youtube/scripts/ytdata.py compete "keyword" --top 10 --json
+python ../youtube/scripts/ytdata.py scorecard "<video_id>" --keyword "target" --json
+python ../youtube/scripts/ytdata.py trends "seed idea" --days 30 --verbose --json
+python ../youtube/scripts/ytdata.py gap "your seed" --competitor @theirhandle --json
 ```
 
-### Phase 6: Outlier / Competitor Analysis (yt-viral skill)
+### Phase 6: Outlier / Competitor Analysis (youtube skill)
 
 ```bash
-python ../yt-viral/scripts/viral.py "@handle" --min-ratio 2.0 --json
+python ../youtube/scripts/ytdata.py outliers "@handle" --min-ratio 2.0 --tab all --json
 ```
 
 ### Phase 7: Retention Analysis (yt-retention skill) — OPTIONAL but HIGH-LEVERAGE
@@ -89,6 +91,7 @@ python ../yt-retention/scripts/retention.py retention.csv --json
 3. **Fail fast** — if a phase fails, report what's missing and stop
 4. **Cache intermediates** — save JSON to temp files, pass paths forward
 5. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the output and continue. Don't halt the pipeline.
+6. **Clean up downloaded artifacts** — yt-dlp may download thumbnail files (.webp, .jpg) and temp files. After each phase, delete any downloaded media files to avoid filling user disk space. Use `--no-thumbnails` flag when possible, or clean up `*.webp`, `*.jpg`, `*.mp4` files in the working directory after each command.
 
 ---
 

@@ -15,44 +15,77 @@ from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
 
-def parse_retention_csv(csv_path: str) -> Dict:
-    """Parse YouTube Studio audience retention CSV."""
+def parse_retention_csv(csv_path: str, video_duration_seconds: float = None) -> Dict:
+    """Parse YouTube Studio audience retention CSV.
+    
+    Args:
+        csv_path: Path to CSV file
+        video_duration_seconds: If provided, converts percentage positions to seconds
+    """
     rows = []
     with open(csv_path, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
             # Normalize keys
-            row = {k.strip().lower().replace(' ', '_').replace('%', 'pct'): v for k, v in row.items()}
+            row = {k.strip().lower().replace(' ', '_').replace('%', 'pct').replace('(', '').replace(')', ''): v for k, v in row.items()}
             rows.append(row)
     
     if not rows:
         return {"error": "No data rows found"}
     
-    # Find time and retention columns
+    # Find time and retention columns (multiple possible formats)
     time_col = None
     retention_col = None
     for col in rows[0].keys():
-        if 'time' in col or 'elapsed' in col:
+        col_lower = col.lower()
+        if 'video_position' in col_lower or 'time' in col_lower or 'elapsed' in col_lower or 'position' in col_lower:
             time_col = col
-        elif 'retention' in col or 'audience' in col or 'pct' in col:
+        elif 'retention' in col_lower or 'audience' in col_lower:
             retention_col = col
+    
+    # Fallback: if no time column found, check for pct columns (percentage of video)
+    if not time_col:
+        for col in rows[0].keys():
+            if 'pct' in col and 'video' in col:
+                time_col = col
+                break
+    
+    # Fallback: if no retention column found
+    if not retention_col:
+        for col in rows[0].keys():
+            if 'pct' in col and 'audience' in col:
+                retention_col = col
+                break
     
     if not time_col or not retention_col:
         return {"error": f"Could not find time/retention columns. Columns: {list(rows[0].keys())}"}
     
     # Parse data points
     points = []
+    time_is_pct = False
     for row in rows:
         try:
-            time_str = row[time_col]
-            # Parse time (HH:MM:SS or MM:SS or seconds)
-            seconds = parse_time_to_seconds(time_str)
+            time_val = row[time_col]
+            # Check if time is in HH:MM:SS format or percentage
+            if ':' in str(time_val):
+                seconds = parse_time_to_seconds(time_val)
+            else:
+                # Percentage of video (0-100) - convert to seconds if duration known
+                try:
+                    pct = float(time_val)
+                    time_is_pct = True
+                    if video_duration_seconds:
+                        seconds = (pct / 100.0) * video_duration_seconds
+                    else:
+                        seconds = pct  # Store as percentage for now
+                except ValueError:
+                    continue
             retention = float(row[retention_col].replace('%', '').replace(',', ''))
-            points.append({"time_seconds": seconds, "retention_pct": retention})
+            points.append({"time_seconds": seconds, "retention_pct": retention, "time_is_pct": time_is_pct})
         except (ValueError, KeyError):
             continue
     
-    return {"points": points, "raw_rows": len(rows)}
+    return {"points": points, "raw_rows": len(rows), "time_is_pct": time_is_pct}
 
 
 def parse_time_to_seconds(time_str: str) -> float:
@@ -78,10 +111,26 @@ def parse_time_to_seconds(time_str: str) -> float:
 
 
 def detect_hook_leak(points: List[Dict]) -> Dict:
-    """Detect hook leak (first 30 seconds drop)."""
-    early_points = [p for p in points if p["time_seconds"] <= 30]
+    """Detect hook leak (first 30% of video or first 30 seconds)."""
+    if not points:
+        return {"leak_pct": 0, "severity": "unknown", "details": "No data"}
+    
+    # Check if time is in percentage (0-100) or seconds
+    time_is_pct = points[0].get("time_is_pct", False)
+    
+    if time_is_pct:
+        # First 30% of video
+        early_points = [p for p in points if p["time_seconds"] <= 30]
+        time_unit = "%"
+        time_desc = "30% of video"
+    else:
+        # First 30 seconds
+        early_points = [p for p in points if p["time_seconds"] <= 30]
+        time_unit = "s"
+        time_desc = "30s"
+    
     if not early_points:
-        return {"leak_pct": 0, "severity": "unknown", "details": "No early data"}
+        return {"leak_pct": 0, "severity": "unknown", "details": f"No early data (first {time_desc})"}
     
     start_retention = points[0]["retention_pct"] if points else 100
     min_early = min(p["retention_pct"] for p in early_points)
@@ -94,7 +143,7 @@ def detect_hook_leak(points: List[Dict]) -> Dict:
         "severity": severity,
         "start_retention": start_retention,
         "min_early_retention": min_early,
-        "details": f"Lost {leak:.1f}% in first 30s ({severity})"
+        "details": f"Lost {leak:.1f}% in first {time_desc} ({severity})"
     }
 
 
@@ -185,10 +234,11 @@ def main():
     parser.add_argument("--transcript", help="Optional transcript JSON to correlate cliffs")
     parser.add_argument("--threshold", type=float, default=5.0, help="Cliff detection threshold (% drop)")
     parser.add_argument("--json", action="store_true", help="Output JSON")
+    parser.add_argument("--duration", type=int, help="Video duration in seconds (converts % positions to seconds)")
     args = parser.parse_args()
 
     # Parse CSV
-    data = parse_retention_csv(args.csv)
+    data = parse_retention_csv(args.csv, video_duration_seconds=args.duration)
     if "error" in data:
         print(f"ERROR: {data['error']}", file=sys.stderr)
         sys.exit(1)

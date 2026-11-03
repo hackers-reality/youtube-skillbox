@@ -52,7 +52,7 @@ for stream in (sys.stdout, sys.stderr):
 
 
 def run_ytdlp(args):
-    cmd = [sys.executable, "-m", "yt_dlp"] + args + ["--no-warnings"]
+    cmd = [sys.executable, "-m", "yt_dlp"] + args + ["--no-warnings", "--no-write-thumbnail"]
     return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
@@ -903,36 +903,128 @@ def _pairs_of_kind(node):
 
 
 def cmd_profile(a):
-    base = a.profile if a.profile.startswith("http") else f"https://www.youtube.com/{a.profile}"
-    proc = run_ytdlp(["--skip-download", "--dump-single-json", base])
-    if proc.returncode != 0 or not proc.stdout.strip():
-        err = (proc.stderr or "").strip().splitlines()
-        print(f"ERROR: {err[-1] if err else 'could not fetch channel profile'}", file=sys.stderr)
+    """Fetch channel profile using fast Innertube API (avoids yt-dlp timeout on large channels)."""
+    # Resolve handle to channel URL
+    handle = a.profile.strip()
+    if handle.startswith("http"):
+        base = handle
+    elif handle.startswith("@"):
+        base = f"https://www.youtube.com/@{handle[1:]}"
+    elif handle.startswith("UC") and len(handle) == 24:
+        base = f"https://www.youtube.com/channel/{handle}"
+    else:
+        base = f"https://www.youtube.com/@{handle}"
+    
+    base = base.rstrip("/")
+    # Strip any tab suffix
+    for suf in ("/videos", "/shorts", "/streams", "/playlists", "/community", "/posts", "/shows", "/about"):
+        if base.endswith(suf):
+            base = base[: -len(suf)]
+    
+    # First, get channel ID from the initial page's metadata
+    channel_id = None
+    try:
+        html = _http_get(base)
+        data = _extract_ytInitialData(html)
+        if data:
+            # The channel ID is in metadata.channelMetadataRenderer.externalId
+            meta = data.get("metadata", {}).get("channelMetadataRenderer", {})
+            channel_id = meta.get("externalId")
+            if channel_id and channel_id.startswith("UC"):
+                pass  # Got it
+            else:
+                # Fallback: search for channelId in the data
+                def find_channel_id(obj):
+                    if isinstance(obj, dict):
+                        if "channelId" in obj and isinstance(obj["channelId"], str) and obj["channelId"].startswith("UC"):
+                            return obj["channelId"]
+                        for v in obj.values():
+                            r = find_channel_id(v)
+                            if r:
+                                return r
+                    elif isinstance(obj, list):
+                        for v in obj:
+                            r = find_channel_id(v)
+                            if r:
+                                return r
+                    return None
+                channel_id = find_channel_id(data)
+    except Exception:
+        pass
+    
+    if not channel_id:
+        print("ERROR: could not resolve channel ID", file=sys.stderr)
         sys.exit(1)
-    d = json.loads(proc.stdout)
     
-    # Get shorts count separately since profile doesn't include it
+    # Fetch profile via Innertube browse API (fast, no video data)
+    try:
+        key, ctx = _innertube_cfg()
+        payload = json.dumps({"context": ctx, "browseId": channel_id}).encode("utf-8")
+        url = f"https://www.youtube.com/youtubei/v1/browse?key={key}"
+        req = urllib.request.Request(url, data=payload, headers=dict(_UA, **{"Content-Type": "application/json"}), method="POST")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            resp = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception as e:
+        print(f"ERROR: could not fetch channel profile: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Parse profile data from Innertube response
+    meta = resp.get("metadata", {}).get("channelMetadataRenderer", {})
+    header_vm = resp.get("header", {}).get("pageHeaderRenderer", {}).get("content", {}).get("pageHeaderViewModel", {})
+    
+    # Extract subscriber count from header metadata
+    subscribers = None
+    video_count = None
+    for row in header_vm.get("metadata", {}).get("contentMetadataViewModel", {}).get("metadataRows", []):
+        for part in row.get("metadataParts", []):
+            text = part.get("text", {}).get("content", "")
+            if "subscriber" in text.lower():
+                # Parse "131 subscribers" -> 131
+                import re
+                m = re.search(r"([\d,]+)\s*subscriber", text, re.I)
+                if m:
+                    subscribers = int(m.group(1).replace(",", ""))
+            elif "video" in text.lower():
+                m = re.search(r"([\d,]+)\s*video", text, re.I)
+                if m:
+                    video_count = int(m.group(1).replace(",", ""))
+    
+    # Get shorts count if requested (optional, can be slow)
     shorts_count = None
-    shorts_proc = run_ytdlp(["--skip-download", "--flat-playlist", "--dump-json", f"{base}/shorts"])
-    if shorts_proc.returncode == 0 and shorts_proc.stdout.strip():
-        shorts_count = len([ln for ln in shorts_proc.stdout.splitlines() if ln.strip().startswith("{")])
+    if getattr(a, "with_shorts", False):
+        try:
+            shorts_proc = run_ytdlp(["--skip-download", "--flat-playlist", "--dump-json", f"{base}/shorts"])
+            if shorts_proc.returncode == 0 and shorts_proc.stdout.strip():
+                shorts_count = len([ln for ln in shorts_proc.stdout.splitlines() if ln.strip().startswith("{")])
+        except Exception:
+            pass
     
-    video_count = d.get("playlist_count") or d.get("upload_count")
+    # Fallback to metadata for video count if not in header
+    if video_count is None:
+        video_count = meta.get("videoCount")
+        if video_count:
+            try:
+                video_count = int(video_count)
+            except Exception:
+                video_count = None
+    
     payload = {
-        "name": d.get("channel") or d.get("uploader"),
-        "handle": d.get("id"),
-        "channel_url": d.get("webpage_url") or d.get("channel_url"),
-        "subscribers": d.get("channel_follower_count"),
+        "name": meta.get("title"),
+        "handle": meta.get("vanityChannelUrl", "").replace("http://www.youtube.com/", "").replace("https://www.youtube.com/", "") or channel_id,
+        "channel_url": meta.get("channelUrl") or base,
+        "subscribers": subscribers,
         "video_count": video_count,
         "shorts_count": shorts_count,
-        "total_views": d.get("view_count"),
-        "description": d.get("channel_description") or d.get("description"),
-        "tags": d.get("tags"),
-        "country": d.get("channel_country") or d.get("country"),
+        "total_views": None,  # Not available in fast API
+        "description": meta.get("description"),
+        "tags": meta.get("keywords", "").split(", ") if meta.get("keywords") else [],
+        "country": meta.get("country"),
     }
+    
     if a.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
+    
     for k, v in payload.items():
         if v is not None and v != []:
             if isinstance(v, str) and len(v) > 600:
@@ -1094,7 +1186,7 @@ def cmd_scorecard(a):
 
 def cmd_outliers(a):
     """Find videos where views/subscriber ratio exceeds threshold."""
-    # Resolve handle to channel URL and get subscriber count
+    # Resolve handle to channel URL and get subscriber count via fast Innertube API
     from urllib.parse import urlparse
     handle = a.handle.strip()
     if handle.startswith("http"):
@@ -1105,13 +1197,75 @@ def cmd_outliers(a):
         base = f"https://www.youtube.com/channel/{handle}"
     else:
         base = f"https://www.youtube.com/@{handle}"
-
-    proc = run_ytdlp(["--skip-download", "--dump-single-json", base])
-    if proc.returncode != 0 or not proc.stdout.strip():
-        print("ERROR: could not resolve channel", file=sys.stderr)
+    
+    base = base.rstrip("/")
+    # Strip any tab suffix
+    for suf in ("/videos", "/shorts", "/streams", "/playlists", "/community", "/posts", "/shows", "/about"):
+        if base.endswith(suf):
+            base = base[: -len(suf)]
+    
+    # First, get channel ID from the initial page's metadata
+    channel_id = None
+    try:
+        html = _http_get(base)
+        data = _extract_ytInitialData(html)
+        if data:
+            # The channel ID is in metadata.channelMetadataRenderer.externalId
+            meta = data.get("metadata", {}).get("channelMetadataRenderer", {})
+            channel_id = meta.get("externalId")
+            if channel_id and channel_id.startswith("UC"):
+                pass  # Got it
+            else:
+                # Fallback: search for channelId in the data
+                def find_channel_id(obj):
+                    if isinstance(obj, dict):
+                        if "channelId" in obj and isinstance(obj["channelId"], str) and obj["channelId"].startswith("UC"):
+                            return obj["channelId"]
+                        for v in obj.values():
+                            r = find_channel_id(v)
+                            if r:
+                                return r
+                    elif isinstance(obj, list):
+                        for v in obj:
+                            r = find_channel_id(v)
+                            if r:
+                                return r
+                    return None
+                channel_id = find_channel_id(data)
+    except Exception:
+        pass
+    
+    if not channel_id:
+        print("ERROR: could not resolve channel ID", file=sys.stderr)
         sys.exit(1)
-    d = json.loads(proc.stdout)
-    subs = d.get("channel_follower_count")
+    
+    # Fetch subscriber count via fast Innertube browse API
+    try:
+        key, ctx = _innertube_cfg()
+        payload = json.dumps({"context": ctx, "browseId": channel_id}).encode("utf-8")
+        url = f"https://www.youtube.com/youtubei/v1/browse?key={key}"
+        req = urllib.request.Request(url, data=payload, headers=dict(_UA, **{"Content-Type": "application/json"}), method="POST")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            resp = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception as e:
+        print(f"ERROR: could not fetch channel profile: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Extract subscriber count from header metadata
+    subs = None
+    header_vm = resp.get("header", {}).get("pageHeaderRenderer", {}).get("content", {}).get("pageHeaderViewModel", {})
+    for row in header_vm.get("metadata", {}).get("contentMetadataViewModel", {}).get("metadataRows", []):
+        for part in row.get("metadataParts", []):
+            text = part.get("text", {}).get("content", "")
+            if "subscriber" in text.lower():
+                import re
+                m = re.search(r"([\d,]+)\s*subscriber", text, re.I)
+                if m:
+                    subs = int(m.group(1).replace(",", ""))
+                    break
+        if subs:
+            break
+    
     if not subs:
         print("ERROR: could not determine subscriber count", file=sys.stderr)
         sys.exit(1)
@@ -1137,33 +1291,40 @@ def cmd_outliers(a):
             except Exception:
                 pass
 
-    # Fetch videos from the requested tab
-    tab_suffix = f"/{a.tab}" if a.tab in ("videos", "shorts") else ""
-    tab_url = base + tab_suffix
-    proc = run_ytdlp(["--skip-download", "--flat-playlist", "--dump-json", tab_url,
-                      "--playlist-end", str(a.limit)])
-    if proc.returncode != 0 or not proc.stdout.strip():
-        print("ERROR: no videos found", file=sys.stderr)
+    # Fetch videos from the requested tab(s) - flat-playlist already includes view_count!
+    tabs_to_scan = ["videos", "shorts"] if a.tab == "all" else [a.tab]
+    
+    all_videos = []
+    for tab in tabs_to_scan:
+        tab_suffix = f"/{tab}" if tab in ("videos", "shorts") else ""
+        tab_url = base + tab_suffix
+        proc = run_ytdlp(["--skip-download", "--flat-playlist", "--dump-json", tab_url,
+                          "--playlist-end", str(a.limit)])
+        if proc.returncode != 0 or not proc.stdout.strip():
+            print(f"WARNING: no videos found in {tab} tab", file=sys.stderr)
+            continue
+        
+        for line in proc.stdout.strip().splitlines():
+            try:
+                v = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            vid = v.get("id")
+            if not vid:
+                continue
+            v["_source_tab"] = tab  # Track which tab this came from
+            all_videos.append(v)
+
+    if not all_videos:
+        print("ERROR: no videos found in any tab", file=sys.stderr)
         sys.exit(1)
 
     outliers = []
-    for line in proc.stdout.strip().splitlines():
-        try:
-            d = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        vid = d.get("id")
+    for v in all_videos:
+        vid = v.get("id")
         if not vid:
             continue
-        # Get detailed info for view count
-        detail = run_ytdlp(["--skip-download", "--dump-single-json",
-                            f"https://www.youtube.com/watch?v={vid}"])
-        if detail.returncode != 0:
-            continue
-        try:
-            v = json.loads(detail.stdout)
-        except json.JSONDecodeError:
-            continue
+        # Use view_count directly from flat-playlist (no extra per-video call needed!)
         views = v.get("view_count") or 0
         if views == 0:
             continue
@@ -1176,7 +1337,8 @@ def cmd_outliers(a):
                 "views": views,
                 "ratio": round(ratio, 2),
                 "duration": v.get("duration"),
-                "upload_date": v.get("upload_date"),
+                "upload_date": v.get("upload_date") or v.get("timestamp"),
+                "source_tab": v.get("_source_tab", "videos"),
             })
 
     outliers.sort(key=lambda x: -x["ratio"])
@@ -1225,7 +1387,7 @@ def cmd_gap(a):
     my_data = json.loads(my_output)
     my_kws = {k["keyword"].lower(): k for k in my_data["keywords"]}
 
-    # Get competitor profile
+    # Get competitor profile via fast Innertube API
     comp = a.competitor.strip()
     if comp.startswith("http"):
         base = comp
@@ -1235,13 +1397,58 @@ def cmd_gap(a):
         base = f"https://www.youtube.com/channel/{comp}"
     else:
         base = f"https://www.youtube.com/@{comp}"
-
-    proc = run_ytdlp(["--skip-download", "--dump-single-json", base])
-    if proc.returncode != 0 or not proc.stdout.strip():
-        print("ERROR: could not fetch competitor profile", file=sys.stderr)
+    
+    base = base.rstrip("/")
+    for suf in ("/videos", "/shorts", "/streams", "/playlists", "/community", "/posts", "/shows", "/about"):
+        if base.endswith(suf):
+            base = base[: -len(suf)]
+    
+    channel_id = None
+    if "/channel/" in base:
+        channel_id = base.split("/channel/")[-1].split("/")[0]
+    
+    if not channel_id:
+        try:
+            html = _http_get(base)
+            data = _extract_ytInitialData(html)
+            if data:
+                def find_channel_id(obj):
+                    if isinstance(obj, dict):
+                        if "channelId" in obj and isinstance(obj["channelId"], str) and obj["channelId"].startswith("UC"):
+                            return obj["channelId"]
+                        for v in obj.values():
+                            r = find_channel_id(v)
+                            if r:
+                                return r
+                    elif isinstance(obj, list):
+                        for v in obj:
+                            r = find_channel_id(v)
+                            if r:
+                                return r
+                    return None
+                channel_id = find_channel_id(data)
+        except Exception:
+            pass
+    
+    if not channel_id:
+        print("ERROR: could not resolve competitor channel ID", file=sys.stderr)
         sys.exit(1)
-    d = json.loads(proc.stdout)
-    comp_tags = [t.lower() for t in (d.get("tags") or [])]
+    
+    # Fetch profile via fast Innertube browse API
+    try:
+        key, ctx = _innertube_cfg()
+        payload = json.dumps({"context": ctx, "browseId": channel_id}).encode("utf-8")
+        url = f"https://www.youtube.com/youtubei/v1/browse?key={key}"
+        req = urllib.request.Request(url, data=payload, headers=dict(_UA, **{"Content-Type": "application/json"}), method="POST")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            resp = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception as e:
+        print(f"ERROR: could not fetch competitor profile: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Extract tags from metadata
+    meta = resp.get("metadata", {}).get("channelMetadataRenderer", {})
+    comp_tags = [t.lower() for t in meta.get("keywords", "").split(", ")] if meta.get("keywords") else []
 
     if a.json:
         print(json.dumps({
@@ -1658,7 +1865,7 @@ def _serp_stats(entries, query, top=10):
         med = _median(views)
         # 1k views -> 0, 10M -> 100
         v = max(0.0, min(100.0, (math.log10(med) - 3) / 4 * 100))
-        sig["views"] = (40, v, f"median {fmt_views(int(med))} views")
+        sig["views"] = (35, v, f"median {fmt_views(int(med))} views")
     sig["authority"] = (25, 100.0 * verified / n, f"{verified} of {n} verified")
     if cover:
         c = 100.0 * _median(cover)
@@ -1678,7 +1885,7 @@ def _serp_stats(entries, query, top=10):
         med_vel = _median(velocities)
         # log scale: 10 vpd -> ~0, 100K vpd -> 100
         v = max(0.0, min(100.0, (math.log10(max(med_vel, 1)) - 1) / 5 * 100))
-        sig["velocity"] = (10, v, f"median {fmt_views(int(med_vel))} views/day")
+        sig["velocity"] = (5, v, f"median {fmt_views(int(med_vel))} views/day")
 
     if not sig:
         return None
@@ -1895,6 +2102,7 @@ def main():
 
     p = sub.add_parser("profile", help="Channel profile / About section")
     p.add_argument("profile", help="@handle or channel URL")
+    p.add_argument("--with-shorts", action="store_true", help="also fetch shorts count (slower)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_profile)
 
@@ -1937,8 +2145,9 @@ def main():
     p.add_argument("handle", help="@handle, channel URL, or UC... ID")
     p.add_argument("--min-ratio", type=float, default=3.0,
                    help="minimum views/subscriber ratio (default 3.0)")
-    p.add_argument("--limit", type=int, default=20, help="max videos to scan")
-    p.add_argument("--tab", choices=["videos", "shorts"], default="videos")
+    p.add_argument("--limit", type=int, default=20, help="max videos to scan per tab")
+    p.add_argument("--tab", choices=["videos", "shorts", "all"], default="all",
+                   help="which tab to scan (default: all)")
     p.add_argument("--verify-subs", action="store_true",
                    help="cross-check subscriber count against a video from the channel")
     p.add_argument("--json", action="store_true")

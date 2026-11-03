@@ -18,7 +18,7 @@ from datetime import datetime
 
 def run_ytdlp(args: List[str]) -> subprocess.CompletedProcess:
     """Run yt-dlp as module."""
-    cmd = [sys.executable, "-m", "yt_dlp"] + args
+    cmd = [sys.executable, "-m", "yt_dlp"] + args + ["--no-write-thumbnail"]
     return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
@@ -229,7 +229,7 @@ def main():
             "top_velocity": velocity,
             "scanned": len(videos),
             "min_ratio": args.min_ratio
-        }, ensure_ascii=False, indent=2)
+        }, ensure_ascii=False, indent=2))
     else:
         print(f"\n=== OUTLIERS (ratio ≥ {args.min_ratio}x) ===")
         if outliers:
