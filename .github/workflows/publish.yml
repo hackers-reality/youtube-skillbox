@@ -6,7 +6,6 @@ on:
       - 'v*'
 
 permissions:
-  id-token: write  # Required for trusted publishing (OIDC)
   contents: read
 
 jobs:
@@ -32,8 +31,8 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # No token needed - uses OIDC trusted publishing
-        # Requires PyPI project configured for trusted publishing
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
 # Optional: Also publish to TestPyPI on non-tag pushes to main
 # Uncomment below if you want TestPyPI on main branch pushes
