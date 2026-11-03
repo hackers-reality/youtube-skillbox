@@ -76,21 +76,21 @@ The skills aren't isolated — they form an **7-phase analysis pipeline** that a
 
 ```mermaid
 graph TD
-    A[User: Channel Analysis] --> B[Phase 1: youtube]
-    B --> C[Phase 2: transcript]
-    C --> D[Phase 3: yt-script]
-    D --> E[Phase 4: yt-package]
-    E --> F[Phase 5: youtube (SEO/keywords)]
-    F --> G[Phase 6: youtube (outliers/gaps)]
-    G --> H[Phase 7: yt-retention*]
+    A["User: Channel Analysis"] --> B["Phase 1: youtube"]
+    B --> C["Phase 2: transcript"]
+    C --> D["Phase 3: yt-script"]
+    D --> E["Phase 4: yt-package"]
+    E --> F["Phase 5: youtube (SEO/keywords)"]
+    F --> G["Phase 6: youtube (outliers/gaps)"]
+    G --> H["Phase 7: yt-retention*"]
     
-    B --> J[Data: sections, videos, home, profile]
-    C --> K[Transcripts for top 3 videos]
-    D --> L[Hook scores 0-100]
-    E --> M[Title/thumbnail scores]
-    F --> N[Keywords, competition, scorecards]
-    G --> O[Outliers, competitor gaps]
-    H --> P[ONE fix + 3 working + don't-do]
+    B --> J["Data: sections, videos, home, profile"]
+    C --> K["Transcripts for top 3 videos"]
+    D --> L["Hook scores 0-100"]
+    E --> M["Title/thumbnail scores"]
+    F --> N["Keywords, competition, scorecards"]
+    G --> O["Outliers, competitor gaps"]
+    H --> P["ONE fix + 3 working + don't-do"]
 ```
 
 *Phase 7 (yt-retention) optional — requires YouTube Studio CSV export.
