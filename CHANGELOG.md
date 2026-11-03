@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.5] - 2026-11-04
+
+### Fixed
+- **Installed CLI runtime lookup**: Resolve the bundled `ytdata.py` through the installed wheel's RECORD metadata so relocated data-files are found reliably across virtual environments and user installs; retain sysconfig and source-checkout fallbacks.
+- **Skill installers**: Both shell and PowerShell installers now verify that the shared engine was copied to `youtube/scripts/ytdata.py` and report its installed location.
+
+### Tests
+- Added regression coverage for wheel metadata relocation and source-checkout fallback.
+- The release workflow must exercise the installed CLI's real `--help` path, not only its version string.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
