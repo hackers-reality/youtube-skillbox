@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-11-03
+
+### Fixed
+- **CLI entry point**: Fixed `ytdata` console script entry point in `pyproject.toml` (was missing `[project.scripts]` section)
+- **CLI entry point**: Fixed `ytdata` console script to be properly registered in wheel metadata
+
+### Changed
+- **Packaging**: Fixed `pyproject.toml` to use `[project.scripts]` instead of `setup.py` entry_points for modern packaging
+
+### Fixed
+- **CLI entry point**: `ytdata` console script now properly registered in wheel metadata
+
+### Documentation
+- **PyPI page**: Package metadata now renders correctly on PyPI with proper CLI entry point
+
 ## [0.4.1] - 2026-11-03
 
 ### Fixed
