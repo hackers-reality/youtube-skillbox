@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: youtube-skillbox
-Version: 0.4.0
+Version: 0.4.1
 Summary: Free YouTube research toolkit — search, keywords, competition, rank tracking, SEO scorecard, outliers, content gap, trends. No user-supplied YouTube Data API key required.
 Home-page: https://github.com/hackers-reality/youtube-skillbox
 Author: hackers-reality
@@ -52,10 +52,21 @@ Dynamic: summary
   <a href="#-the-youtube-research-skill">Research</a> ·
   <a href="#-the-transcript-skill">Transcripts</a> ·
   <a href="#-when-yt-dlp-cant-do-it-we-build-it">Gap-fill engine</a> ·
-  <a href="#%EF%B8%8F-the-11-creator-skills">Creator tools</a> ·
+  <a href="#%EF%B8%8F-the-10-creator-skills">Creator tools</a> ·
   <a href="#-install">Install</a> ·
   <a href="#-have-your-agent-set-it-up-for-you">Agent prompt</a>
 </p>
+
+---
+
+## ⚠️ Important Disclaimer
+
+**This tool accesses public YouTube data for research purposes only.**
+
+- Respect YouTube's [Terms of Service](https://www.youtube.com/t/terms) and [Community Guidelines](https://www.youtube.com/t/community_guidelines)
+- Respect rate limits — add delays between bulk requests
+- Not affiliated with YouTube or Google
+- For research/educational use only
 
 ---
 
@@ -113,21 +124,21 @@ The skills aren't isolated — they form an **7-phase analysis pipeline** that a
 
 ```mermaid
 graph TD
-    A[User: Channel Analysis] --> B[Phase 1: youtube]
-    B --> C[Phase 2: transcript]
-    C --> D[Phase 3: yt-script]
-    D --> E[Phase 4: yt-package]
-    E --> F[Phase 5: youtube (SEO/keywords)]
-    F --> G[Phase 6: youtube (outliers/gaps)]
-    G --> H[Phase 7: yt-retention*]
+    A["User: Channel Analysis"] --> B["Phase 1: youtube"]
+    B --> C["Phase 2: transcript"]
+    C --> D["Phase 3: yt-script"]
+    D --> E["Phase 4: yt-package"]
+    E --> F["Phase 5: youtube (SEO/keywords)"]
+    F --> G["Phase 6: youtube (outliers/gaps)"]
+    G --> H["Phase 7: yt-retention*"]
     
-    B --> J[Data: sections, videos, home, profile]
-    C --> K[Transcripts for top 3 videos]
-    D --> L[Hook scores 0-100]
-    E --> M[Title/thumbnail scores]
-    F --> N[Keywords, competition, scorecards]
-    G --> O[Outliers, competitor gaps]
-    H --> P[ONE fix + 3 working + don't-do]
+    B --> J["Data: sections, videos, home, profile"]
+    C --> K["Transcripts for top 3 videos"]
+    D --> L["Hook scores 0-100"]
+    E --> M["Title/thumbnail scores"]
+    F --> N["Keywords, competition, scorecards"]
+    G --> O["Outliers, competitor gaps"]
+    H --> P["ONE fix + 3 working + don't-do"]
 ```
 
 *Phase 7 (yt-retention) optional — requires YouTube Studio CSV export.
@@ -336,7 +347,7 @@ Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbo
    It should read each skills/*/SKILL.md and answer from there.
 ```
 
-**Important**: All 13 skills (youtube, transcript, 11 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. The skills reference it via relative paths (`scripts/ytdata.py` from SKILL.md). You **must** copy the `scripts/` folder alongside each skill's SKILL.md in your agent's skills directory (step 3 above). Or install globally with `pip install -e .` (then `ytdata` works from anywhere).
+**Important**: All 13 skills (youtube, transcript, 10 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. The skills reference it via relative paths (`scripts/ytdata.py` from SKILL.md). You **must** copy the `scripts/` folder alongside each skill's SKILL.md in your agent's skills directory (step 3 above). Or install globally with `pip install -e .` (then `ytdata` works from anywhere).
 
 ---
 
