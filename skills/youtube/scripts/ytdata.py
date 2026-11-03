@@ -198,6 +198,22 @@ def _parse_age(txt):
     return int(n * mult) if mult else None
 
 
+def _parse_age_from_date(upload_date):
+    """Parse YYYYMMDD upload_date string and return age in days."""
+    if not upload_date or len(upload_date) != 8:
+        return None
+    try:
+        from datetime import datetime, timezone
+        y = int(upload_date[:4])
+        m = int(upload_date[4:6])
+        d = int(upload_date[6:8])
+        upload_dt = datetime(y, m, d, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        return (now - upload_dt).days
+    except Exception:
+        return None
+
+
 def _parse_video(v):
     """videoRenderer → the same shape `slim()` expects from a flat yt-dlp entry."""
     vid = v.get("videoId")
@@ -634,6 +650,9 @@ def cmd_channel(a):
                                 "subscribers": d.get("channel_follower_count"),
                                 "categories": d.get("categories"),
                                 "description": (d.get("description") or "")[:500] or None,
+                                "channel_url": d.get("channel_url") or d.get("uploader_url"),
+                                "channel_is_verified": d.get("channel_is_verified"),
+                                "age_days": _parse_age_from_date(d.get("upload_date")),
                             })
                     except json.JSONDecodeError:
                         pass
@@ -668,6 +687,9 @@ def cmd_latest(a):
                                 "subscribers": d.get("channel_follower_count"),
                                 "categories": d.get("categories"),
                                 "description": (d.get("description") or "")[:500] or None,
+                                "channel_url": d.get("channel_url") or d.get("uploader_url"),
+                                "channel_is_verified": d.get("channel_is_verified"),
+                                "age_days": _parse_age_from_date(d.get("upload_date")),
                             })
                     except json.JSONDecodeError:
                         pass
