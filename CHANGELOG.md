@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-11-04
+
+### Added
+- **`--full-meta` flag** for `search`, `channel`, `latest` commands to enrich results with full metadata via yt-dlp
+  - Populates: `upload_date`, `live_status`, `channel_url`, `verified`, `age_days`, `tags`, `likes`, `subscribers`, `categories`
+  - Fixes null fields in search/channel/latest outputs
+
+### Fixed
+- **Metadata completeness**: All fields now populated when using `--full-meta` (previously null: channel_url, verified, age_days)
+
 ## [0.4.3] - 2026-11-03
 
 ### Fixed
