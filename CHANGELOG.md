@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Metadata completeness**: All fields now populated when using `--full-meta` (previously null: channel_url, verified, age_days)
+- **PyPI publishing**: Fixed OIDC trusted publishing workflow with `id-token: write` permission
+- **Workflow YAML**: Fixed encoding issues (em dash) and removed empty `with:` key
+
+### Changed
+- **Release process**: PyPI publishing now uses GitHub Actions OIDC trusted publishing (no API token needed)
 
 ## [0.4.3] - 2026-11-03
 
