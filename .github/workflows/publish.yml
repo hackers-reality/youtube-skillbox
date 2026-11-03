@@ -34,8 +34,9 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        # Uses OIDC trusted publishing (no token needed) — provides provenance metadata
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          # password: ${{ secrets.PYPI_API_TOKEN }}  # Remove or comment out for OIDC
 
 # Optional: Also publish to TestPyPI on non-tag pushes to main
 # Uncomment below if you want TestPyPI on main branch pushes
