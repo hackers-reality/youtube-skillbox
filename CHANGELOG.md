@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ytdata --help` / `ytdata -h` shows **all 17 subcommands** (search, channel, latest, playlist, profile, posts, sections, shows, home, info, scorecard, outliers, gap, keywords, compete, trends, track)
   - Subcommand help (e.g., `ytdata search --help`) passes through to ytdata
 
+### Removed
+- **Deprecated skill**: `yt-audit` excluded from package distribution (use `yt-workflow` instead)
+
+### Fixed
+- **Packaging**: Exclude `yt-audit` skill from wheel via `packages.find.exclude` and `MANIFEST.in prune`
+- **Search results**: `info` command returns full metadata (upload_date, live_status, tags, etc.) via yt-dlp; search uses Innertube for locale-pinned results
+
 ## [0.4.2] - 2026-11-03
 
 ### Fixed

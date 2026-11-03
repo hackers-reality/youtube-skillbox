@@ -57,7 +57,7 @@ Changelog = "https://github.com/hackers-reality/youtube-skillbox/blob/main/CHANG
 Funding = "https://github.com/sponsors/hackers-reality"
 
 [tool.setuptools]
-packages = {find = {}}
+packages = {find = {exclude = ["skills.yt-audit*"]}}
 package-data = {youtube_skillbox = ["skills/*/scripts/*", "skills/*/*.py"]}
 
 [tool.setuptools.dynamic]

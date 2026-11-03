@@ -4,3 +4,6 @@ recursive-include skills *
 recursive-include tests *
 recursive-include youtube_skillbox *
 recursive-include THIRD_PARTY_LICENSES *
+
+# Exclude deprecated yt-audit skill
+prune skills/yt-audit
