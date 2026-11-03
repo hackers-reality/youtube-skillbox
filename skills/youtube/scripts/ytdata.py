@@ -576,6 +576,32 @@ def cmd_search(a):
         print(f"WARNING: falling back to yt-dlp — results will follow your IP, "
               f"not gl={a.gl}", file=sys.stderr)
         entries = dump_entries([f"ytsearch{a.limit}:{q}"])
+    
+    # Enrich with full metadata if requested
+    if getattr(a, "full_meta", False):
+        enriched = []
+        for e in entries[: a.limit]:
+            vid = e.get("id")
+            if vid:
+                detail = run_ytdlp(["--skip-download", "--dump-single-json", f"https://www.youtube.com/watch?v={vid}"])
+                if detail.returncode == 0:
+                    try:
+                        d = json.loads(detail.stdout)
+                        # Merge yt-dlp data (takes precedence for fields it has)
+                        e.update({
+                            "upload_date": d.get("upload_date"),
+                            "live_status": d.get("live_status"),
+                            "tags": d.get("tags"),
+                            "likes": d.get("like_count"),
+                            "subscribers": d.get("channel_follower_count"),
+                            "categories": d.get("categories"),
+                            "description": (d.get("description") or "")[:500] or None,
+                        })
+                    except json.JSONDecodeError:
+                        pass
+            enriched.append(e)
+        entries = enriched
+    
     print_list([slim(e) for e in entries[: a.limit]], a.json)
 
 
@@ -587,8 +613,8 @@ def cmd_channel(a):
         base = base.rstrip("/").split("/videos")[0] + f"/{a.tab}"
     args = [base, "--playlist-items", f"1-{a.limit}"]
     entries = dump_entries(args)
-    # flat-playlist doesn't include duration; fetch per-video if --with-duration
-    if getattr(a, "with_duration", False):
+    # flat-playlist doesn't include duration; fetch per-video if --with-duration or --full-meta
+    if getattr(a, "with_duration", False) or getattr(a, "full_meta", False):
         for e in entries:
             vid = e.get("id")
             if vid:
@@ -598,6 +624,17 @@ def cmd_channel(a):
                         d = json.loads(detail.stdout)
                         e["duration"] = d.get("duration")
                         e["duration_string"] = d.get("duration_string")
+                        if getattr(a, "full_meta", False):
+                            # Merge yt-dlp data for full metadata
+                            e.update({
+                                "upload_date": d.get("upload_date"),
+                                "live_status": d.get("live_status"),
+                                "tags": d.get("tags"),
+                                "likes": d.get("like_count"),
+                                "subscribers": d.get("channel_follower_count"),
+                                "categories": d.get("categories"),
+                                "description": (d.get("description") or "")[:500] or None,
+                            })
                     except json.JSONDecodeError:
                         pass
     print_list([slim(e) for e in entries[: a.limit]], a.json)
@@ -610,8 +647,8 @@ def cmd_latest(a):
         base = base.rstrip("/") + "/videos"
     args = [base, "--playlist-items", f"1-{a.limit}"]
     entries = dump_entries(args)
-    # flat-playlist doesn't include duration; fetch per-video if --with-duration
-    if getattr(a, "with_duration", False):
+    # flat-playlist doesn't include duration; fetch per-video if --with-duration or --full-meta
+    if getattr(a, "with_duration", False) or getattr(a, "full_meta", False):
         for e in entries:
             vid = e.get("id")
             if vid:
@@ -621,6 +658,17 @@ def cmd_latest(a):
                         d = json.loads(detail.stdout)
                         e["duration"] = d.get("duration")
                         e["duration_string"] = d.get("duration_string")
+                        if getattr(a, "full_meta", False):
+                            # Merge yt-dlp data for full metadata
+                            e.update({
+                                "upload_date": d.get("upload_date"),
+                                "live_status": d.get("live_status"),
+                                "tags": d.get("tags"),
+                                "likes": d.get("like_count"),
+                                "subscribers": d.get("channel_follower_count"),
+                                "categories": d.get("categories"),
+                                "description": (d.get("description") or "")[:500] or None,
+                            })
                     except json.JSONDecodeError:
                         pass
     print_list([slim(e) for e in entries[: a.limit]], a.json)
@@ -2099,6 +2147,7 @@ def main():
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--gl", default="US", help="region to rank in (US, IN, GB, JP, …)")
     p.add_argument("--hl", default="en", help="interface language (en, hi, ja, …)")
+    p.add_argument("--full-meta", action="store_true", help="enrich results with full metadata via yt-dlp (upload_date, live_status, tags, likes, etc.)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_search)
 
@@ -2107,6 +2156,7 @@ def main():
     p.add_argument("--limit", type=int, default=15)
     p.add_argument("--tab", choices=["videos", "shorts", "streams"], default="videos")
     p.add_argument("--with-duration", action="store_true", help="fetch duration per video (slower)")
+    p.add_argument("--full-meta", action="store_true", help="enrich results with full metadata via yt-dlp (upload_date, live_status, tags, likes, etc.)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_channel)
 
@@ -2114,6 +2164,7 @@ def main():
     p.add_argument("handle", help="@handle or channel URL")
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--with-duration", action="store_true", help="fetch duration per video (slower)")
+    p.add_argument("--full-meta", action="store_true", help="enrich results with full metadata via yt-dlp (upload_date, live_status, tags, likes, etc.)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_latest)
 
