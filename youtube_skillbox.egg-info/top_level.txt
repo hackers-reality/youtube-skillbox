@@ -1,2 +1,8 @@
+THIRD_PARTY_LICENSES
+assets
+build
+dist
 skills
+tests
+tmp
 youtube_skillbox

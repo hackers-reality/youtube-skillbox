@@ -1,39 +1,48 @@
 Metadata-Version: 2.4
 Name: youtube-skillbox
-Version: 0.4.1
+Version: 0.4.2
 Summary: Free YouTube research toolkit — search, keywords, competition, rank tracking, SEO scorecard, outliers, content gap, trends. No user-supplied YouTube Data API key required.
 Home-page: https://github.com/hackers-reality/youtube-skillbox
 Author: hackers-reality
-Author-email: phulariarnav@gmail.com
-Project-URL: Source, https://github.com/hackers-reality/youtube-skillbox
+Author-email: hackers-reality <phulariarnav@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/hackers-reality/youtube-skillbox
+Project-URL: Repository, https://github.com/hackers-reality/youtube-skillbox
 Project-URL: Issues, https://github.com/hackers-reality/youtube-skillbox/issues
-Keywords: youtube seo keyword research rank tracking competition analysis
+Project-URL: Documentation, https://github.com/hackers-reality/youtube-skillbox#readme
+Project-URL: Changelog, https://github.com/hackers-reality/youtube-skillbox/blob/main/CHANGELOG.md
+Project-URL: Funding, https://github.com/sponsors/hackers-reality
+Keywords: youtube,seo,keyword,research,rank,tracking,competition,analysis,outliers,trends,scorecard,content-gap,transcript,shorts,metadata,api-free
 Classifier: Development Status :: 4 - Beta
 Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: End Users/Desktop
 Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: Internet :: WWW/HTTP :: Indexing/Search
 Classifier: Topic :: Multimedia :: Video
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Text Processing :: Linguistic
+Classifier: Typing :: Typed
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: yt-dlp>=2026.10.26
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Provides-Extra: test
+Requires-Dist: pytest>=7.0; extra == "test"
+Requires-Dist: pytest-cov>=4.0; extra == "test"
 Dynamic: author
-Dynamic: author-email
-Dynamic: classifier
-Dynamic: description
-Dynamic: description-content-type
 Dynamic: home-page
-Dynamic: keywords
 Dynamic: license-file
-Dynamic: project-url
-Dynamic: requires-dist
 Dynamic: requires-python
-Dynamic: summary
 
 <div align="center">
   <img src="assets/banner.svg" alt="YouTube Skillbox — 13 free YouTube skills for AI agents" width="100%">
@@ -296,7 +305,25 @@ python -m pip install --user -U yt-dlp
 
 > `posts`, `home`, `shows`, `search`, `keywords` and `track` work even *without* yt-dlp (pure HTTP). Everything else runs through it. Run it as a module (`python -m yt_dlp`) if the exe isn't on PATH.
 
-Then, from this repo — point the installer at **your agent's skills directory** (where it discovers `SKILL.md` files):
+### Option 1: Install from PyPI (Recommended)
+
+```bash
+pip install youtube-skillbox
+```
+
+This installs the `ytdata` CLI globally and all skills for your agent.
+
+### Option 2: Install from Source (Development)
+
+```bash
+git clone https://github.com/hackers-reality/youtube-skillbox.git
+cd youtube-skillbox
+pip install -e .
+```
+
+### Option 3: Manual Skill Installation (for agents)
+
+Point the installer at **your agent's skills directory** (where it discovers `SKILL.md` files):
 
 ```bash
 ./install.sh "/path/to/your/agents/skills"          # Linux / macOS — e.g. ~/.config/opencode/skills
@@ -369,6 +396,17 @@ This project reads publicly available YouTube data directly from the web rather 
 - **No user-supplied YouTube Data API key is required** — the project dynamically extracts YouTube's `INNERTUBE_API_KEY` from YouTube's public page configuration. This does not imply unlimited access, guaranteed uptime, unlimited requests, or immunity from YouTube rate limits.
 
 Use it at your own risk; this project is not affiliated with YouTube or Google. The code itself stays MIT-licensed — this section is guidance about how you use it against YouTube, not a restriction on the code.
+
+## 📄 Third-Party Licenses
+
+This project includes third-party code under the following licenses:
+
+| Component | License | Copyright | Source |
+|-----------|---------|-----------|--------|
+| `youtube-agent-skill` (10 creator skills) | MIT | Copyright (c) 2026 Jake Schincariol | [Jakeschincariol/youtube-agent-skill](https://github.com/Jakeschincariol/youtube-agent-skill) |
+| `yt-dlp` | Unlicense | — | [yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) |
+
+Full license texts are available in [`THIRD_PARTY_LICENSES/`](THIRD_PARTY_LICENSES/).
 
 ## 📄 License
 

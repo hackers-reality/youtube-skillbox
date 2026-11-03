@@ -1,1 +1,9 @@
 yt-dlp>=2026.10.26
+
+[dev]
+pytest>=7.0
+pytest-cov>=4.0
+
+[test]
+pytest>=7.0
+pytest-cov>=4.0
