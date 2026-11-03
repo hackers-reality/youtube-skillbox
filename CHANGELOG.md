@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-11-03
+
+### Fixed
+- **CLI**: Delegated ALL args to `ytdata.main()` for proper subcommand/help handling
+  - `ytdata --version` / `ytdata -v` shows version
+  - `ytdata --help` / `ytdata -h` shows **all 17 subcommands** (search, channel, latest, playlist, profile, posts, sections, shows, home, info, scorecard, outliers, gap, keywords, compete, trends, track)
+  - Subcommand help (e.g., `ytdata search --help`) passes through to ytdata
+
 ## [0.4.2] - 2026-11-03
 
 ### Fixed
