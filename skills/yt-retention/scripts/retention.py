@@ -144,7 +144,9 @@ def detect_hook_leak(points: List[Dict]) -> Dict:
             "severity": "unknown", 
             "details": f"No early data (first {time_desc})",
             "start_retention": points[0]["retention_pct"] if points else 0,
-            "min_early_retention": 0
+            "min_early_retention": 0,
+            "time_unit": time_unit,
+            "time_desc": time_desc
         }
     
     start_retention = points[0]["retention_pct"] if points else 100
@@ -158,6 +160,8 @@ def detect_hook_leak(points: List[Dict]) -> Dict:
         "severity": severity,
         "start_retention": start_retention,
         "min_early_retention": min_early,
+        "time_unit": time_unit,
+        "time_desc": time_desc,
         "details": f"Lost {leak:.1f}% in first {time_desc} ({severity})"
     }
 
