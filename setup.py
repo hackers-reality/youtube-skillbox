@@ -14,6 +14,13 @@ setup(
     author_email="phulariarnav@gmail.com",
     url="https://github.com/hackers-reality/youtube-skillbox",
     packages=find_packages(),
+    package_data={
+        "youtube_skillbox": [
+            "skills/*/scripts/*",
+            "skills/*/*.py",
+        ],
+    },
+    include_package_data=True,
     entry_points={
         "console_scripts": [
             "ytdata=youtube_skillbox.cli:main",

@@ -22,6 +22,17 @@
 
 ---
 
+## ⚠️ Important Disclaimer
+
+**This tool accesses public YouTube data for research purposes only.**
+
+- Respect YouTube's [Terms of Service](https://www.youtube.com/t/terms) and [Community Guidelines](https://www.youtube.com/t/community_guidelines)
+- Respect rate limits — add delays between bulk requests
+- Not affiliated with YouTube or Google
+- For research/educational use only
+
+---
+
 ## 📺 Demo
 
 Watch the agent in action — one prompt, *"why isn't this channel growing?"* OpenCode researches the videos, Shorts and transcripts, then surfaces the hooks, scripts and what to fix (why one Short hit 8K views while the rest couldn't pass 1K):
