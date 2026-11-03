@@ -290,7 +290,7 @@ Point the installer at **your agent's skills directory** (where it discovers `SK
 …or by hand — copy any folder from [`skills/`](skills/) there yourself:
 
 ```bash
-cp -r skills/* ~/.config/opencode/skills/            # example: OpenCode
+find skills -mindepth 1 -maxdepth 1 -type d ! -name yt-audit -exec cp -r {} ~/.config/opencode/skills/ \\;
 ```
 
 Restart the agent session; the skills are auto-discovered by their `description` frontmatter.
