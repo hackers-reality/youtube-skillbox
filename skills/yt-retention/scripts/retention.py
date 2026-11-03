@@ -38,22 +38,31 @@ def parse_retention_csv(csv_path: str, video_duration_seconds: float = None) -> 
     retention_col = None
     for col in rows[0].keys():
         col_lower = col.lower()
-        if 'video_position' in col_lower or 'time' in col_lower or 'elapsed' in col_lower or 'position' in col_lower:
+        # More specific matching to avoid picking wrong percentage columns
+        if 'video_position' in col_lower:
             time_col = col
-        elif 'retention' in col_lower or 'audience' in col_lower:
+        elif 'elapsed' in col_lower and 'time' in col_lower:
+            time_col = col
+        elif 'time' in col_lower and 'position' in col_lower:
+            time_col = col
+        elif 'retention' in col_lower and 'audience' in col_lower:
+            retention_col = col
+        elif 'audience' in col_lower and 'retention' in col_lower:
             retention_col = col
     
-    # Fallback: if no time column found, check for pct columns (percentage of video)
+    # Fallback: if no time column found, check for video position pct columns
     if not time_col:
         for col in rows[0].keys():
-            if 'pct' in col and 'video' in col:
+            col_lower = col.lower()
+            if 'pct' in col_lower and 'video' in col_lower and 'position' in col_lower:
                 time_col = col
                 break
     
     # Fallback: if no retention column found
     if not retention_col:
         for col in rows[0].keys():
-            if 'pct' in col and 'audience' in col:
+            col_lower = col.lower()
+            if 'pct' in col_lower and 'audience' in col_lower and 'retention' in col_lower:
                 retention_col = col
                 break
     
@@ -113,7 +122,7 @@ def parse_time_to_seconds(time_str: str) -> float:
 def detect_hook_leak(points: List[Dict]) -> Dict:
     """Detect hook leak (first 30% of video or first 30 seconds)."""
     if not points:
-        return {"leak_pct": 0, "severity": "unknown", "details": "No data"}
+        return {"leak_pct": 0, "severity": "unknown", "details": "No data", "start_retention": 0, "min_early_retention": 0}
     
     # Check if time is in percentage (0-100) or seconds
     time_is_pct = points[0].get("time_is_pct", False)
@@ -130,7 +139,13 @@ def detect_hook_leak(points: List[Dict]) -> Dict:
         time_desc = "30s"
     
     if not early_points:
-        return {"leak_pct": 0, "severity": "unknown", "details": f"No early data (first {time_desc})"}
+        return {
+            "leak_pct": 0, 
+            "severity": "unknown", 
+            "details": f"No early data (first {time_desc})",
+            "start_retention": points[0]["retention_pct"] if points else 0,
+            "min_early_retention": 0
+        }
     
     start_retention = points[0]["retention_pct"] if points else 100
     min_early = min(p["retention_pct"] for p in early_points)
@@ -278,7 +293,7 @@ def main():
         print(f"   Lost {hook['leak_pct']:.1f}% (start: {hook['start_retention']:.1f}% → min: {hook['min_early_retention']:.1f}%)")
         print(f"   {hook['details']}")
         
-        print(f"\n🟠 CLIFFS ({len(cliffs)} detected ≥{5}% drop):")
+        print(f"\n🟠 CLIFFS ({len(cliffs)} detected ≥{args.threshold:.1f}% drop):")
         for c in cliffs[:10]:
             mm, ss = divmod(int(c["time_seconds"]), 60)
             print(f"   {mm:02d}:{ss:02d}  Drop: {c['drop_pct']:.1f}%  ({c['before_pct']:.1f}% → {c['after_pct']:.1f}%)")

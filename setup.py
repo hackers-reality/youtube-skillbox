@@ -1,20 +1,22 @@
 from setuptools import setup, find_packages
 
+# Read the contents of README.md
+with open("README.md", encoding="utf-8") as f:
+    long_description = f.read()
+
 setup(
     name="youtube-skillbox",
-    version="0.3.0",
-    description="Free YouTube research toolkit — search, keywords, competition, rank tracking, SEO scorecard, outliers, content gap, trends. No API key, $0 forever.",
-    long_description=open("README.md", encoding="utf-8").read(),
+    version="0.4.0",
+    description="Free YouTube research toolkit — search, keywords, competition, rank tracking, SEO scorecard, outliers, content gap, trends. No user-supplied YouTube Data API key required.",
+    long_description=long_description,
     long_description_content_type="text/markdown",
     author="hackers-reality",
     author_email="phulariarnav@gmail.com",
     url="https://github.com/hackers-reality/youtube-skillbox",
-    packages=find_packages(where="skills"),
-    package_dir={"": "skills"},
-    py_modules=["youtube.scripts.ytdata"],
+    packages=find_packages(),
     entry_points={
         "console_scripts": [
-            "ytdata=youtube.scripts.ytdata:main",
+            "ytdata=youtube_skillbox.cli:main",
         ],
     },
     install_requires=[

@@ -6,17 +6,10 @@ description: >-
   "what's working right now", "find viral videos in my niche", "why did this
   blow up", competitor research, or a swipe file.
 ---**Pipeline Position:** Phase 6 — Outlier / Competitor Analysis
-**Inputs:** Channel handle from user; niche from yt-seo
+**Inputs:** Channel handle from user; niche from youtube skill
 **Outputs:** Outliers (views/subs ratio), competitor analysis → feeds yt-workflow (agent synthesizes)
 **Triggers:** what's working in niche, find viral videos, why did this blow up
 
-
-
-# 
-
-## Prerequisites
-
-`yt-dlp` installed: `python -m pip install --user -U yt-dlp`. Uses the shared data module at `../youtube/scripts/ytdata.py` (relative to this SKILL.md). **Ensure `youtube/scripts/ytdata.py` exists alongside this skill** (copy `scripts/` when installing).
 
 # yt-viral
 
@@ -49,6 +42,19 @@ should say so when you present it.
 What to hand back: the top five with their multiples, the formula each used, and the ONE structural
 thing they share. Then the harder line - which of those the user could actually make this week, in
 their voice, with what they have.
+
+## ⚠️ Performance Note
+
+This skill's `viral.py` script uses yt-dlp to fetch channel metadata and individual video details,
+which can be slow for large channels (one yt-dlp call per video). For faster outlier detection
+that scans both videos and shorts tabs in a single pass, prefer the **youtube skill's `outliers` subcommand**:
+
+```bash
+python skills/youtube/scripts/ytdata.py outliers "@handle" --min-ratio 2.0 --tab all --json
+```
+
+This uses flat-playlist (which includes view_count) and fast Innertube API for subscriber counts,
+making it significantly faster for large channels.
 
 ## The gate
 

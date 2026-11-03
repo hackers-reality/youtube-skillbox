@@ -143,18 +143,24 @@ TITLE_RULES = [
 
 
 def score_title(title: str, keyword: str = "") -> Dict:
-    """Score a title against all rules."""
+    """Score a title against all rules.
+    
+    When no keyword is provided, keyword-dependent rules are excluded from both
+    earned weight and total possible weight (score is calculated from applicable checks only).
+    """
     results = []
     total_weight = 0
     earned_weight = 0
     
     for rule in TITLE_RULES:
         weight = rule["weight"]
-        total_weight += weight
         
+        # Skip keyword-dependent rules if no keyword provided
         if rule.get("requires_kw") and not keyword:
-            # Skip keyword-dependent rules if no keyword provided
             continue
+        
+        # Only count weight for rules that are actually evaluated
+        total_weight += weight
         
         if rule.get("requires_kw"):
             passed = rule["check"](title, keyword)

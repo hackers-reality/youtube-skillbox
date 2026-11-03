@@ -1,12 +1,12 @@
 <div align="center">
-  <img src="assets/banner.svg" alt="YouTube Skillbox — 17 free YouTube skills for AI agents" width="100%">
+  <img src="assets/banner.svg" alt="YouTube Skillbox — 13 free YouTube skills for AI agents" width="100%">
 </div>
 
 <h1 align="center">YouTube Skillbox</h1>
 
 <p align="center">
-  <b>17 free YouTube skills for AI agents — research, transcripts, and the full creator workflow.</b><br>
-  No API key · no credits · no expiry — <b>$0 forever</b>
+  <b>13 free YouTube skills for AI agents — research, transcripts, and the full creator workflow.</b><br>
+  No user-supplied YouTube Data API key · no credits · no expiry — <b>$0 forever</b>
 </p>
 
 <p align="center">
@@ -45,7 +45,7 @@ Watch the agent in action — one prompt, *"why isn't this channel growing?"* Op
 | [📺 The `youtube` research skill](#-the-youtube-research-skill) | 17 subcommands — search, keywords, compete, trends, track, scorecard, outliers, gap, channels, posts, shows |
 | [📜 The `transcript` skill](#-the-transcript-skill) | Free transcripts via yt-dlp |
 | [🛠 Gap-fill engine](#-when-yt-dlp-cant-do-it-we-build-it) | How we fill yt-dlp's gaps with raw scrapers |
-| [✂️ The 11 creator skills](#%EF%B8%8F-the-11-creator-skills) | Scripts, SEO, chapters, Shorts, and more |
+| [✂️ The 10 creator skills](#%EF%B8%8F-the-10-creator-skills) | Scripts, SEO, chapters, Shorts, and more |
 | [📦 Install](#-install) | Quick setup for any agent harness |
 | [🤖 Have your agent set it up for you](#-have-your-agent-set-it-up-for-you) | Copy-paste prompt for any coding agent |
 | [📝 Notes & limits](#-notes--limits) | Rate limits, pagination, edge cases |
@@ -64,9 +64,9 @@ Two layers:
 | Layer | Skills | Powered by |
 | ----- | ------ | ---------- |
 | **Data** (research) | `youtube`, `transcript` | `yt-dlp` + custom raw YouTube scrapers |
-| **Creator workflow** | 11 × `yt-*` | local Python scripts, zero network deps for logic |
+| **Creator workflow** | 10 × `yt-*` | local Python scripts, zero network deps for logic |
 
-Everything is free. There is **no paid tier, no API key, and no account** anywhere in the stack.
+Everything is free. There is **no paid tier, no user-supplied YouTube Data API key, and no account** anywhere in the stack.
 
 ---
 
@@ -80,8 +80,8 @@ graph TD
     B --> C[Phase 2: transcript]
     C --> D[Phase 3: yt-script]
     D --> E[Phase 4: yt-package]
-    E --> F[Phase 5: yt-seo]
-    F --> G[Phase 6: yt-viral]
+    E --> F[Phase 5: youtube (SEO/keywords)]
+    F --> G[Phase 6: youtube (outliers/gaps)]
     G --> H[Phase 7: yt-retention*]
     
     B --> J[Data: sections, videos, home, profile]
@@ -101,8 +101,8 @@ graph TD
 | 2 | `transcript` | Top 3 video IDs | Full transcripts (JSON + timestamps) | Raw content |
 | 3 | `yt-script` | Transcripts | Hook scores (0-100) per video | Retention hooks |
 | 4 | `yt-package` | Titles + hook scores | Title/thumbnail scores + briefs | CTR optimization |
-| 5 | `yt-seo` | Niche + target video | Keywords, competition, scorecards | Search visibility |
-| 6 | `yt-viral` | Channel + niche | Outliers (VPH), competitor gaps | Growth levers |
+| 5 | `youtube` | Niche + target video | Keywords, competition, scorecards | Search visibility |
+| 6 | `youtube` | Channel + niche | Outliers, competitor gaps | Growth levers |
 | 7 | `yt-retention` | Studio CSV (optional) | Drop-off points, curves | Pacing fixes |
 
 **Each skill declares its pipeline position in its SKILL.md** — agents read this to know what comes before/after.
@@ -116,18 +116,18 @@ graph TD
 Thirteen subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
 
 ```bash
-python scripts/ytdata.py search "query" --limit 10     # find videos on a topic
-python scripts/ytdata.py keywords "seed idea" --patterns  # keyword ideas (2 engines), scored
-python scripts/ytdata.py track "keyword" --video <url> # where your video ranks (+ history)
-python scripts/ytdata.py profile "@handle"             # About: subs, description, keywords
-python scripts/ytdata.py sections "@handle"            # count EVERY tab at once
-python scripts/ytdata.py home "@handle"                # home shelves + Featured Channels
-python scripts/ytdata.py channel "@handle" --tab shorts
-python scripts/ytdata.py latest "@handle" --limit 10
-python scripts/ytdata.py posts "@handle" --limit 30    # community posts, paginated
-python scripts/ytdata.py shows "@handle"               # Shows tab (episode collections)
-python scripts/ytdata.py playlist "<playlist-url>"
-python scripts/ytdata.py info "<video-url-or-id>"      # views, likes, tags, date
+python skills/youtube/scripts/ytdata.py search "query" --limit 10     # find videos on a topic
+python skills/youtube/scripts/ytdata.py keywords "seed idea" --patterns  # keyword ideas (2 engines), scored
+python skills/youtube/scripts/ytdata.py track "keyword" --video <url> # where your video ranks (+ history)
+python skills/youtube/scripts/ytdata.py profile "@handle"             # About: subs, description, keywords
+python skills/youtube/scripts/ytdata.py sections "@handle"            # count EVERY tab at once
+python skills/youtube/scripts/ytdata.py home "@handle"                # home shelves + Featured Channels
+python skills/youtube/scripts/ytdata.py channel "@handle" --tab shorts
+python skills/youtube/scripts/ytdata.py latest "@handle" --limit 10
+python skills/youtube/scripts/ytdata.py posts "@handle" --limit 30    # community posts, paginated
+python skills/youtube/scripts/ytdata.py shows "@handle"               # Shows tab (episode collections)
+python skills/youtube/scripts/ytdata.py playlist "<playlist-url>"
+python skills/youtube/scripts/ytdata.py info "<video-url-or-id>"      # views, likes, tags, date
 ```
 
 `search`, `keywords`, `track` and `compete` take `--gl` / `--hl` (default `US` / `en`) to pin a
@@ -138,7 +138,7 @@ region and language, so a rank position means the same thing on every machine.
 Add `--json` to any command for structured output. Example:
 
 ```
-$ python scripts/ytdata.py sections "@MrBeast"
+$ python skills/youtube/scripts/ytdata.py sections "@MrBeast"
 Channel: https://www.youtube.com/@MrBeast
   videos   : 805
   shorts   : 205
@@ -318,6 +318,7 @@ This project reads publicly available YouTube data directly from the web rather 
 - **Personal use** — read-only public data, no login, low volume: low risk. Keep it that way.
 - **Commercial or high-volume use** — not recommended. Scaling it up, reselling data, or hammering YouTube meaningfully raises the risk of rate-limits, IP blocks, or takedown requests.
 - Never point it at private, age-restricted, or members-only content — the tools intentionally fail instead of bypassing.
+- **No user-supplied YouTube Data API key is required** — the project dynamically extracts YouTube's `INNERTUBE_API_KEY` from YouTube's public page configuration. This does not imply unlimited access, guaranteed uptime, unlimited requests, or immunity from YouTube rate limits.
 
 Use it at your own risk; this project is not affiliated with YouTube or Google. The code itself stays MIT-licensed — this section is guidance about how you use it against YouTube, not a restriction on the code.
 
@@ -328,7 +329,7 @@ Released under the **[MIT License](LICENSE)** — free to use, modify, and redis
 ## 🙏 Credits
 
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — the extraction engine underneath the data layer.
-- The 11 creator (`yt-*`) skills come from the community GitHub collection **`youtube-agent-skill`** — installed here nearly as-is (deduplicated only), not rewritten from scratch.
+- The 10 creator (`yt-*`) skills come from the community GitHub collection **`youtube-agent-skill`** — installed here nearly as-is (deduplicated only), not rewritten from scratch.
 - The `youtube` and `transcript` skills (scripts and docs, including every gap-fill in this README) were built and rewritten in this project.
 - This project reads publicly available YouTube data; use it responsibly and respect YouTube's Terms of Service.
 

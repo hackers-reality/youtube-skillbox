@@ -642,13 +642,21 @@ def cmd_sections(a):
             base = base[: -len(suf)]
     tabs = ["videos", "shorts", "streams", "playlists"]
     result = {"channel": base}
+    errors = {}
     for tab in tabs:
         proc = run_ytdlp(["--flat-playlist", "--dump-json", f"{base}/{tab}"])
         lines = [ln for ln in proc.stdout.splitlines() if ln.strip().startswith("{")]
         count = len(lines)
         # yt-dlp errors when a tab doesn't exist (e.g. no streams tab).
-        if count == 0 and ("does not have" in (proc.stderr or "") or proc.returncode != 0):
+        # Check for specific "does not have" message which indicates the tab genuinely doesn't exist.
+        stderr = proc.stderr or ""
+        if count == 0 and "does not have" in stderr:
             result[tab] = None  # tab doesn't exist
+        elif proc.returncode != 0:
+            # Network failure, HTTP 429, bot detection, timeout, or extractor error
+            # Don't silently convert to "no tab" - record the error
+            errors[tab] = stderr.strip() or f"yt-dlp exit code {proc.returncode}"
+            result[tab] = {"error": errors[tab]}
         else:
             result[tab] = count
 
@@ -659,19 +667,24 @@ def cmd_sections(a):
         n_shows = sum(1 for _ in _find_renderers(shows_data or {}, "gridShowRenderer"))
         # A channel without a Shows tab gets redirected to a page with no shows.
         result["shows"] = n_shows if n_shows else None
-    except Exception:
-        result["shows"] = None
+    except Exception as e:
+        result["shows"] = {"error": str(e)}
 
     # Community posts: page 1 + one continuation probe for an honest count.
     n_posts, has_more = _count_community(base)
     result["community_posts"] = n_posts
     result["community_posts_more"] = has_more
 
+    if errors:
+        result["_errors"] = errors
+
     if a.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
     def fmt(v, none="no tab"):
+        if isinstance(v, dict) and "error" in v:
+            return f"error: {v['error'][:80]}"
         return none if v is None else v
 
     print(f"Channel: {base}")
@@ -682,6 +695,10 @@ def cmd_sections(a):
     print(f"  playlists: {fmt(result['playlists'])}")
     more = "+" if result["community_posts_more"] else ""
     print(f"  community: {result['community_posts']}{more} posts (use `posts` to read them)")
+    if errors:
+        print("\nErrors encountered (these tabs may exist but couldn't be fetched):")
+        for tab, err in errors.items():
+            print(f"  {tab}: {err[:100]}")
 
 
 def cmd_shows(a):
@@ -979,15 +996,10 @@ def cmd_profile(a):
         for part in row.get("metadataParts", []):
             text = part.get("text", {}).get("content", "")
             if "subscriber" in text.lower():
-                # Parse "131 subscribers" -> 131
-                import re
-                m = re.search(r"([\d,]+)\s*subscriber", text, re.I)
-                if m:
-                    subscribers = int(m.group(1).replace(",", ""))
+                # Parse "131 subscribers" / "1.2K subscribers" / "466M subscribers" -> int
+                subscribers = _parse_count(text)
             elif "video" in text.lower():
-                m = re.search(r"([\d,]+)\s*video", text, re.I)
-                if m:
-                    video_count = int(m.group(1).replace(",", ""))
+                video_count = _parse_count(text)
     
     # Get shorts count if requested (optional, can be slow)
     shorts_count = None
@@ -1258,11 +1270,8 @@ def cmd_outliers(a):
         for part in row.get("metadataParts", []):
             text = part.get("text", {}).get("content", "")
             if "subscriber" in text.lower():
-                import re
-                m = re.search(r"([\d,]+)\s*subscriber", text, re.I)
-                if m:
-                    subs = int(m.group(1).replace(",", ""))
-                    break
+                subs = _parse_count(text)
+                break
         if subs:
             break
     
@@ -1779,9 +1788,15 @@ def cmd_trends(a):
 # ---- Rank tracking: where a video sits for a keyword (no API key) ----
 
 def _video_id(url_or_id):
+    # Handle youtu.be/VIDEO_ID
+    m = re.search(r"youtu\.be/([\w-]{11})", url_or_id)
+    if m:
+        return m.group(1)
+    # Handle standard watch URLs, shorts, embed, live
     m = re.search(r"(?:[?&]v=|/shorts/|/embed/|/live/)([\w-]{11})", url_or_id)
     if m:
         return m.group(1)
+    # Raw 11-character video ID
     if re.fullmatch(r"[\w-]{11}", url_or_id):
         return url_or_id
     return None
@@ -1808,12 +1823,13 @@ def _difficulty_band(score):
 def _serp_stats(entries, query, top=10):
     """Competition metrics for `query` from the top `top` results (already fetched).
 
-    Four signals, each 0-100 where higher = harder to rank:
+    Five signals, each 0-100 where higher = harder to rank:
       views        median views of the incumbents (log scale — raw views across
                    niches are not comparable)
       authority    share of verified channels
-      titles       how tightly their titles already match the query
+      titles       how tightly their titles already match the query (token-level)
       entrenchment how old the incumbents are (old results are hard to displace)
+      velocity     median views/day (log scale)
 
     Signals with no data are dropped and the remaining weights renormalised
     rather than silently counted as zero — the yt-dlp fallback carries no age.
@@ -1842,11 +1858,18 @@ def _serp_stats(entries, query, top=10):
              "what", "when", "why", "from", "into", "about", "will", "can"}
     toks = [t for t in re.findall(r"[a-z0-9]+", (query or "").lower())
             if len(t) >= 3 and t not in stops]
+    
+    def _tokenize(text):
+        """Tokenize text into words, removing stop words and short tokens."""
+        return [t for t in re.findall(r"[a-z0-9]+", text.lower())
+                if len(t) >= 3 and t not in stops]
+    
     cover = []
     if toks:
         for e in rows:
             title = (e.get("title") or "").lower()
-            cover.append(sum(1 for t in toks if t in title) / len(toks))
+            title_tokens = _tokenize(title)
+            cover.append(sum(1 for t in toks if t in title_tokens) / len(toks))
 
     # brand-query heuristic: single token that MATCHES a channel name in the
     # top results (case-insensitive). Pure informational single words like
