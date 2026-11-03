@@ -171,7 +171,7 @@ Channel: https://www.youtube.com/@MrBeast
 | `gap` | Content gap analysis — my seed keywords vs competitor's profile keywords |
 | `profile` | Channel About section — name, handle, subs, description, **all** keywords |
 | `sections` | One-call counts of every tab: videos / shorts / streams / shows / playlists / posts |
-| `home` | Home-tab shelves — featured video, Shorts, playlists, posts, **Featured Channels** (names + URLs) |
+| `home` | Home-tab shelves — featured video, Shorts, playlists, posts, and **Featured Channels** with URLs |
 | `channel` | Channel uploads (`--tab videos \| shorts \| streams`) |
 | `latest` | Most recent uploads, reverse-chronological |
 | `posts` | Community posts — text, author, date, like count, URL. **Paginated** (~10/page) |
@@ -251,7 +251,7 @@ They pair naturally with the data layer: `youtube` finds the videos → `transcr
 
 ## 📦 Install
 
-**Requirements:** Python 3.10+ and [`yt-dlp`](https://github.com/yt-dlp/yt-dlp):
+**Requirements:** Python 3.11+ and [`yt-dlp`](https://github.com/yt-dlp/yt-dlp):
 
 ```bash
 python -m pip install --user -U yt-dlp
