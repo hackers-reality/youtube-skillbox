@@ -58,7 +58,11 @@ Funding = "https://github.com/sponsors/hackers-reality"
 
 [tool.setuptools]
 packages = {find = {exclude = ["skills.yt-audit*"]}}
-package-data = {youtube_skillbox = ["skills/*/scripts/*", "skills/*/*.py"]}
+
+# Keep the standalone research engine alongside the installed console script.
+# It lives outside the Python package in the source tree, so install it as data.
+[tool.setuptools.data-files]
+"share/youtube-skillbox/skills/youtube/scripts" = ["skills/youtube/scripts/ytdata.py"]
 
 [tool.setuptools.dynamic]
 version = {attr = "youtube_skillbox.__version__"}
