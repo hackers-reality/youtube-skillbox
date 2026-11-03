@@ -26,5 +26,11 @@ for skill_dir in "$SRC"/*/; do
   count=$((count + 1))
 done
 
+if [ ! -f "$DEST/youtube/scripts/ytdata.py" ]; then
+  echo "ERROR: shared engine missing at $DEST/youtube/scripts/ytdata.py" >&2
+  exit 1
+fi
+
 echo "Installed $count active skills -> $DEST"
+echo "Shared engine -> $DEST/youtube/scripts/ytdata.py"
 echo "Restart your agent session to pick them up."
