@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install all YouTube Skillbox skills into an agent's skills directory.
+# Install active YouTube Skillbox skills into an agent's skills directory.
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
@@ -14,8 +14,17 @@ DEST="$1"
 SRC="$(cd "$(dirname "$0")" && pwd)/skills"
 
 mkdir -p "$DEST"
-cp -r "$SRC"/* "$DEST/"
 
-count=$(find "$SRC" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-echo "Installed $count skills -> $DEST"
+count=0
+for skill_dir in "$SRC"/*/; do
+  [ -d "$skill_dir" ] || continue
+  skill_name="$(basename "$skill_dir")"
+  if [ "$skill_name" = "yt-audit" ]; then
+    continue
+  fi
+  cp -r "$skill_dir" "$DEST/"
+  count=$((count + 1))
+done
+
+echo "Installed $count active skills -> $DEST"
 echo "Restart your agent session to pick them up."

@@ -2,48 +2,75 @@
 """
 YouTube Skillbox - CLI entry point.
 """
-import sys
 import os
+import sys
+import sysconfig
 
-# Get version from package metadata
+
 def get_version():
+    """Return the installed distribution version when available."""
     try:
         from importlib.metadata import version
         return version("youtube-skillbox")
     except Exception:
         return "unknown"
 
-# Find the skills directory from the installed package
+
 def find_skills_dir():
-    """Find the skills/youtube/scripts directory from the installed package."""
+    """Locate ytdata.py in an installed wheel or a source checkout."""
+    candidates = []
+
+    # Wheels normally install bundled data under the interpreter's data prefix.
+    data_prefix = sysconfig.get_path("data")
+    if data_prefix:
+        candidates.append(
+            os.path.join(
+                data_prefix, "share", "youtube-skillbox", "skills",
+                "youtube", "scripts"
+            )
+        )
+
+    # pip install --user uses a separate data prefix on POSIX and Windows.
     try:
-        import youtube_skillbox
-        pkg_path = os.path.dirname(youtube_skillbox.__file__)
-        skills_dir = os.path.join(pkg_path, "skills", "youtube", "scripts")
-        if os.path.isdir(skills_dir):
-            return skills_dir
-    except ImportError:
-        pass
-    # Fallback: try relative to this file (editable install from source)
+        user_scheme = sysconfig.get_preferred_scheme("user")
+        user_data_prefix = sysconfig.get_path("data", scheme=user_scheme)
+    except (AttributeError, KeyError, ValueError):
+        user_data_prefix = None
+
+    if user_data_prefix:
+        candidates.append(
+            os.path.join(
+                user_data_prefix, "share", "youtube-skillbox", "skills",
+                "youtube", "scripts"
+            )
+        )
+
+    # Editable installs and source checkouts keep skills/ at the repository root.
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(script_dir)
-    skills_dir = os.path.join(repo_root, "skills", "youtube", "scripts")
-    if os.path.isdir(skills_dir):
-        return skills_dir
-    raise RuntimeError("Could not locate skills/youtube/scripts directory")
+    candidates.append(os.path.join(repo_root, "skills", "youtube", "scripts"))
+
+    for skills_dir in candidates:
+        if os.path.isfile(os.path.join(skills_dir, "ytdata.py")):
+            return skills_dir
+
+    raise RuntimeError(
+        "Could not locate ytdata.py. Reinstall youtube-skillbox or run from "
+        "a complete source checkout."
+    )
+
 
 def main():
-    # Handle version flag early
     if "--version" in sys.argv or "-v" in sys.argv:
         print(f"ytdata {get_version()}")
         return
 
-    # Pass ALL args to ytdata.main() - it handles all subcommands and help
     skills_dir = find_skills_dir()
     sys.path.insert(0, skills_dir)
 
-    from ytdata import main
-    main()
+    from ytdata import main as ytdata_main
+    ytdata_main()
+
 
 if __name__ == "__main__":
     main()

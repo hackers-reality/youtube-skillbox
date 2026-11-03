@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   publish:
-    name: Publish to PyPI
+    name: Validate and publish to PyPI
+    # Manual runs are permitted only when the selected ref is a version tag.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,10 +25,13 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install build dependencies
+      - name: Install build and test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build twine
+          pip install build twine pytest
+
+      - name: Run test suite
+        run: python -m pytest
 
       - name: Clean dist
         run: rm -rf dist
@@ -34,40 +39,16 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Validate distributions
+        run: python -m twine check dist/*
+
+      - name: Smoke-test installed wheel
+        run: |
+          python -m venv /tmp/ytdata-smoke
+          /tmp/ytdata-smoke/bin/python -m pip install dist/*.whl
+          /tmp/ytdata-smoke/bin/ytdata --version
+          /tmp/ytdata-smoke/bin/ytdata --help
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # Uses OIDC trusted publishing (no token needed) - provides provenance metadata
-
-# Optional: Also publish to TestPyPI on non-tag pushes to main
-# Uncomment below if you want TestPyPI on main branch pushes
-#
-# on:
-#   push:
-#     branches: [main]
-#   push:
-#     tags: ['v*']
-#
-# jobs:
-#   testpypi:
-#     if: github.ref == 'refs/heads/main'
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: actions/setup-python@v5
-#         with: { python-version: '3.13' }
-#       - run: pip install build twine
-#       - run: python -m build
-#       - uses: pypa/gh-action-pypi-publish@release/v1
-#         with:
-#           repository-url: https://test.pypi.org/legacy/
-#   publish:
-#     needs: testpypi
-#     if: startsWith(github.ref, 'refs/tags/v')
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: actions/setup-python@v5
-#         with: { python-version: '3.13' }
-#       - run: pip install build twine
-#       - run: python -m build
-#       - uses: pypa/gh-action-pypi-publish@release/v1
+        # Uses OIDC trusted publishing (no API token needed) and provides provenance metadata
