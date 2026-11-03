@@ -20,12 +20,27 @@ def find_skills_dir():
     """Locate ytdata.py in an installed wheel or a source checkout."""
     candidates = []
 
-    # Wheels install the standalone engine under the interpreter's data prefix.
+    # Wheels normally install bundled data under the interpreter's data prefix.
     data_prefix = sysconfig.get_path("data")
     if data_prefix:
         candidates.append(
             os.path.join(
                 data_prefix, "share", "youtube-skillbox", "skills",
+                "youtube", "scripts"
+            )
+        )
+
+    # pip install --user uses a separate data prefix on POSIX and Windows.
+    try:
+        user_scheme = sysconfig.get_preferred_scheme("user")
+        user_data_prefix = sysconfig.get_path("data", scheme=user_scheme)
+    except (AttributeError, KeyError, ValueError):
+        user_data_prefix = None
+
+    if user_data_prefix:
+        candidates.append(
+            os.path.join(
+                user_data_prefix, "share", "youtube-skillbox", "skills",
                 "youtube", "scripts"
             )
         )
