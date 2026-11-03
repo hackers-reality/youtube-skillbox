@@ -6,7 +6,7 @@ with open("README.md", encoding="utf-8") as f:
 
 setup(
     name="youtube-skillbox",
-    version="0.4.1",
+    version="0.4.2",
     description="Free YouTube research toolkit — search, keywords, competition, rank tracking, SEO scorecard, outliers, content gap, trends. No user-supplied YouTube Data API key required.",
     long_description=long_description,
     long_description_content_type="text/markdown",
