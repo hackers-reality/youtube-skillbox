@@ -124,7 +124,7 @@ graph TD
 
 ## 📺 The `youtube` research skill
 
-Thirteen subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
+Seventeen subcommands behind one script — `skills/youtube/scripts/ytdata.py`:
 
 ```bash
 python skills/youtube/scripts/ytdata.py search "query" --limit 10     # find videos on a topic
@@ -265,7 +265,7 @@ python -m pip install --user -U yt-dlp
 pip install youtube-skillbox
 ```
 
-This installs the `ytdata` CLI globally and all skills for your agent.
+This installs the `ytdata` CLI and its bundled research engine. It does **not** install the 13 agent skill folders; use Option 3 to copy those into your agent's skills directory.
 
 ### Option 2: Install from Source (Development)
 
@@ -324,11 +324,11 @@ Set up my YouTube skills from https://github.com/hackers-reality/youtube-skillbo
 5. Smoke-test: run
    python ~/.config/opencode/skills/youtube/scripts/ytdata.py search "rick astley" --limit 1
    (should return 1 video with title, views, channel, URL)
-6. Ask your agent: "List all 13 YouTube skills and when to use each"
+6. Ask your agent: "List all 13 active YouTube skills and when to use each"
    It should read each skills/*/SKILL.md and answer from there.
 ```
 
-**Important**: All 13 skills (youtube, transcript, 10 yt-*) share **one data module**: `skills/youtube/scripts/ytdata.py`. The skills reference it via relative paths (`scripts/ytdata.py` from SKILL.md). You **must** copy the `scripts/` folder alongside each skill's SKILL.md in your agent's skills directory (step 3 above). Or install globally with `pip install -e .` (then `ytdata` works from anywhere).
+**Important**: The 13 active skills (youtube, transcript, 10 yt-* creator skills, and yt-workflow) share **one data module**: `skills/youtube/scripts/ytdata.py`. The deprecated `yt-audit` folder is intentionally skipped by both installers. The skills reference it via relative paths (`scripts/ytdata.py` from SKILL.md). You **must** copy the `scripts/` folder alongside each skill's SKILL.md in your agent's skills directory (step 3 above). An editable install exposes the `ytdata` CLI from your checkout; it does not copy skill folders into your agent's skills directory.
 
 ---
 
