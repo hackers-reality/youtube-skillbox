@@ -1,0 +1,6 @@
+include LICENSE
+include README.md
+recursive-include skills *
+recursive-include tests *
+recursive-include youtube_skillbox *
+recursive-include THIRD_PARTY_LICENSES *
