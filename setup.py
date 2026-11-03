@@ -33,18 +33,31 @@ setup(
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
+        "Intended Audience :: End Users/Desktop",
         "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
         "Topic :: Internet :: WWW/HTTP",
+        "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
         "Topic :: Multimedia :: Video",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: Text Processing :: Linguistic",
+        "Typing :: Typed",
     ],
-    keywords="youtube seo keyword research rank tracking competition analysis",
+    keywords=[
+        "youtube", "seo", "keyword", "research", "rank", "tracking", 
+        "competition", "analysis", "outliers", "trends", "scorecard",
+        "content-gap", "transcript", "shorts", "metadata", "api-free"
+    ],
     project_urls={
         "Source": "https://github.com/hackers-reality/youtube-skillbox",
         "Issues": "https://github.com/hackers-reality/youtube-skillbox/issues",
+        "Documentation": "https://github.com/hackers-reality/youtube-skillbox#readme",
+        "Changelog": "https://github.com/hackers-reality/youtube-skillbox/blob/main/CHANGELOG.md",
+        "Funding": "https://github.com/sponsors/hackers-reality",
     },
 )

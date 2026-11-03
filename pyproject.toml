@@ -1,0 +1,78 @@
+[project]
+name = "youtube-skillbox"
+description = "Free YouTube research toolkit — search, keywords, competition, rank tracking, SEO scorecard, outliers, content gap, trends. No user-supplied YouTube Data API key required."
+readme = "README.md"
+authors = [
+    {name = "hackers-reality", email = "phulariarnav@gmail.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Linguistic",
+    "Typing :: Typed",
+]
+keywords = [
+    "youtube", "seo", "keyword", "research", "rank", "tracking",
+    "competition", "analysis", "outliers", "trends", "scorecard",
+    "content-gap", "transcript", "shorts", "metadata", "api-free"
+]
+requires-python = ">=3.10"
+dependencies = [
+    "yt-dlp>=2026.10.26",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+ytdata = "youtube_skillbox.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hackers-reality/youtube-skillbox"
+Repository = "https://github.com/hackers-reality/youtube-skillbox"
+Issues = "https://github.com/hackers-reality/youtube-skillbox/issues"
+Documentation = "https://github.com/hackers-reality/youtube-skillbox#readme"
+Changelog = "https://github.com/hackers-reality/youtube-skillbox/blob/main/CHANGELOG.md"
+Funding = "https://github.com/sponsors/hackers-reality"
+
+[tool.setuptools]
+packages = {find = {}}
+package-data = {youtube_skillbox = ["skills/*/scripts/*", "skills/*/*.py"]}
+
+[tool.setuptools.dynamic]
+version = {attr = "youtube_skillbox.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["youtube_skillbox", "skills"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "def __repr__", "raise NotImplementedError"]
+show_missing = true

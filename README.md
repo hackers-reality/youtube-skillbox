@@ -259,7 +259,25 @@ python -m pip install --user -U yt-dlp
 
 > `posts`, `home`, `shows`, `search`, `keywords` and `track` work even *without* yt-dlp (pure HTTP). Everything else runs through it. Run it as a module (`python -m yt_dlp`) if the exe isn't on PATH.
 
-Then, from this repo — point the installer at **your agent's skills directory** (where it discovers `SKILL.md` files):
+### Option 1: Install from PyPI (Recommended)
+
+```bash
+pip install youtube-skillbox
+```
+
+This installs the `ytdata` CLI globally and all skills for your agent.
+
+### Option 2: Install from Source (Development)
+
+```bash
+git clone https://github.com/hackers-reality/youtube-skillbox.git
+cd youtube-skillbox
+pip install -e .
+```
+
+### Option 3: Manual Skill Installation (for agents)
+
+Point the installer at **your agent's skills directory** (where it discovers `SKILL.md` files):
 
 ```bash
 ./install.sh "/path/to/your/agents/skills"          # Linux / macOS — e.g. ~/.config/opencode/skills
@@ -332,6 +350,17 @@ This project reads publicly available YouTube data directly from the web rather 
 - **No user-supplied YouTube Data API key is required** — the project dynamically extracts YouTube's `INNERTUBE_API_KEY` from YouTube's public page configuration. This does not imply unlimited access, guaranteed uptime, unlimited requests, or immunity from YouTube rate limits.
 
 Use it at your own risk; this project is not affiliated with YouTube or Google. The code itself stays MIT-licensed — this section is guidance about how you use it against YouTube, not a restriction on the code.
+
+## 📄 Third-Party Licenses
+
+This project includes third-party code under the following licenses:
+
+| Component | License | Copyright | Source |
+|-----------|---------|-----------|--------|
+| `youtube-agent-skill` (10 creator skills) | MIT | Copyright (c) 2026 Jake Schincariol | [Jakeschincariol/youtube-agent-skill](https://github.com/Jakeschincariol/youtube-agent-skill) |
+| `yt-dlp` | Unlicense | — | [yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) |
+
+Full license texts are available in [`THIRD_PARTY_LICENSES/`](THIRD_PARTY_LICENSES/).
 
 ## 📄 License
 
