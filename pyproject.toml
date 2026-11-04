@@ -1,7 +1,7 @@
 [project]
 name = "youtube-skillbox"
 description = "Free YouTube research toolkit — search, keywords, competition, rank tracking, SEO scorecard, outliers, content gap, trends. No user-supplied YouTube Data API key required."
-readme = "README.md"
+readme = "DESCRIPTION.md"
 authors = [
     {name = "hackers-reality", email = "phulariarnav@gmail.com"}
 ]

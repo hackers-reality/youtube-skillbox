@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-11-04
+
+### Fixed
+- **PyPI description**: Switched from full GitHub README to CLI-focused `DESCRIPTION.md` — clean commands table, use cases, and flags without GitHub-specific formatting (badges, images, mermaid diagrams)
+
+### Changed
+- **PyPI long description**: Now uses `DESCRIPTION.md` (CLI commands, flags, use cases) instead of `README.md` (badges, images, mermaid, agent prompts)
+
 ## [0.4.5] - 2026-11-04
 
 ### Fixed
