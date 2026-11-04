@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-11-04
+
+### Fixed
+- **UTF-8 BOM handling**: All skill scripts now read files with `utf-8-sig` (title.py, hookscore.py, chapters.py, retention.py) — fixes `UnicodeDecodeError` / `Unexpected UTF-8 BOM` crashes from PowerShell `Out-File` output
+- **`retention.py --help` crash**: argparse help text with `%` was interpreted as a format verb (`TypeError: %d format`). Reworded help strings
+- **Absolute retention support**: Retention analysis now detects absolute audience retention (values >100%, common with rewatch/loop spikes) and reports `n/a (absolute retention)` for hook/slide metrics instead of false "severe" readings
+
+### Documentation
+- **yt-workflow**: Corrected hookscore phase (outputs raw metrics, not a 0-100 score) and added explicit Windows/encoding pitfalls (PowerShell BOM, cp1252 default, file-truncation self-clobber) to Common Agent Errors table
+
 ## [0.4.7] - 2026-11-04
 
 ### Added
