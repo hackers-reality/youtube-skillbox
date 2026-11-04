@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="assets/banner.svg" alt="YouTube Skillbox — 13 free YouTube skills for AI agents" width="100%">
+  <img src="assets/banner.svg" alt="YouTube Skillbox — 14 free YouTube skills for AI agents" width="100%">
 </div>
 
 <h1 align="center">YouTube Skillbox</h1>
 
 <p align="center">
-  <b>13 free YouTube skills for AI agents — research, transcripts, and the full creator workflow.</b><br>
+  <b>14 free YouTube skills for AI agents — research, transcripts, and the full creator workflow.</b><br>
   No user-supplied YouTube Data API key · no credits · no expiry — <b>$0 forever</b>
 </p>
 
@@ -67,12 +67,14 @@ Watch the agent in action — one prompt, *"why isn't this channel growing?"* Op
 | [📜 The `transcript` skill](#-the-transcript-skill) | Free transcripts via yt-dlp |
 | [🛠 Gap-fill engine](#-when-yt-dlp-cant-do-it-we-build-it) | How we fill yt-dlp's gaps with raw scrapers |
 | [✂️ The 10 creator skills](#%EF%B8%8F-the-10-creator-skills) | Scripts, SEO, chapters, Shorts, and more |
+| [🧭 The `yt-guide` skill](#-yt-guide) | Skill router — when to use which skill, how to chain them |
 | [📦 Install](#-install) | Quick setup for any agent harness |
 | [🤖 Have your agent set it up for you](#-have-your-agent-set-it-up-for-you) | Copy-paste prompt for any coding agent |
 | [📝 Notes & limits](#-notes--limits) | Rate limits, pagination, edge cases |
 | [⚖️ Responsible use](#%EF%B8%8F-responsible-use) | Personal vs commercial use, risk notes |
 | [📄 License](#-license) | MIT License |
 | [🙏 Credits](#-credits) | yt-dlp, upstream skill sources |
+| [🧭 yt-guide skill](#-yt-guide) | Skill router — when to use which skill |
 
 ---
 
@@ -86,6 +88,7 @@ Two layers:
 | ----- | ------ | ---------- |
 | **Data** (research) | `youtube`, `transcript` | `yt-dlp` + custom raw YouTube scrapers |
 | **Creator workflow** | 10 × `yt-*` | local Python scripts, zero network deps for logic |
+| **Guide** | `yt-guide` | Skill router — when to use which skill |
 
 Everything is free. There is **no paid tier, no user-supplied YouTube Data API key, and no account** anywhere in the stack.
 
@@ -129,6 +132,37 @@ graph TD
 **Each skill declares its pipeline position in its SKILL.md** — agents read this to know what comes before/after.
 
 **Final synthesis:** After running all phases, the agent synthesizes: **ONE biggest fix + 3 things working + what NOT to do.**
+
+---
+
+## 🧭 The `yt-guide` skill
+
+Not sure which skill to use? `yt-guide` is a **skill router** that tells the agent which skill to pick for any user request, how to use it, when to chain multiple skills, and common mistakes to avoid.
+
+**Decision tree (excerpt):**
+
+```
+Channel audit / "why isn't this growing"  →  yt-workflow
+Plan content / calendar                     →  yt-plan
+Write a script                             →  yt-script
+Optimize a video for search                →  yt-seo (or youtube scorecard)
+Find Shorts in long-form video              →  yt-shorts
+Draft comment replies                      →  yt-comment
+Edit decision list (cut dead air/filler)    →  yt-edit
+Analyze retention CSV                      →  yt-retention
+```
+
+**Chaining patterns:**
+
+| Pattern | Chain | Use when user asks… |
+|---------|-------|---------------------|
+| Channel Audit | `youtube → transcript → yt-script → yt-package → yt-seo → yt-viral → yt-retention` | "audit my channel" |
+| Video Creation | `yt-plan → yt-script → yt-package → yt-seo → [record] → yt-edit → yt-chapters → yt-shorts` | "help me create a video" |
+| SEO Optimization | `youtube info → yt-seo scorecard → yt-package title → yt-script hooks` | "optimize this video" |
+| Repurposing | `transcript → yt-shorts → yt-chapters → yt-package` | "turn this into Shorts" |
+| Research Only | `youtube search/keywords/compete → yt-viral` | "research this niche" |
+
+**For the agent:** Always read `yt-guide/SKILL.md` when unsure which skill to run. It maps user intent → skill and prevents the common mistake of running the full pipeline for a single-question request.
 
 ---
 

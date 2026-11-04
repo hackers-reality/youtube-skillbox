@@ -27,6 +27,8 @@ ytdata outliers "@handle" --min-ratio 2.0 --tab all --json
 
 > **Note:** The examples below use `python skills/youtube/scripts/ytdata.py` for repo-root execution. After `pip install -e .`, prefer the `ytdata` command — it works from any directory.
 
+> **Unsure which skill to use?** Read `skills/yt-guide/SKILL.md` — it's a decision tree that maps user intent to the right skill and explains all skills, when to use each, and how to chain them.
+
 ## When to use
 
 Any "audit my channel" / "why isn't this growing" / "full channel review" / "analyze competitor" request.
