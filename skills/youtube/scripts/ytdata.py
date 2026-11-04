@@ -1744,6 +1744,7 @@ def cmd_keywords(a):
         if rec["question"]:
             score += 5
         rec["score"] = score
+        rec["opportunity_score"] = score  # higher = better opportunity (not difficulty)
         rows.append(rec)
     rows.sort(key=lambda r: (-r["score"], r["keyword"]))
     rows = rows[: a.limit]
@@ -1754,6 +1755,7 @@ def cmd_keywords(a):
     if a.json:
         print(json.dumps({"seed": seed, "gl": a.gl, "hl": a.hl, "sources": sorted(use),
                           "kl": kl, "queries": len(queries), "unique": len(stats),
+                          "score_meaning": "opportunity",
                           "keywords": rows}, ensure_ascii=False, indent=2))
         return
     print(f'Keyword ideas for "{seed}" — {len(stats)} unique from {len(queries)} queries '
@@ -1989,6 +1991,8 @@ def _serp_stats(entries, query, top=10):
     beatable = sum(1 for x in views if x < 10000)
     return {
         "score": round(score, 1),
+        "competition_score": round(score, 1),  # higher = HARDER (never interpret as opportunity)
+        "score_meaning": "competition_difficulty",
         "band": _difficulty_band(score),
         "scored": n,
         "median_views": int(_median(views)) if views else None,
@@ -2160,6 +2164,19 @@ def cmd_track(a):
             print(f"  {r['checked_at']}  {shown}")
 
 
+def _normalize_argv(argv):
+    """YouTube video IDs are 11 chars from [A-Za-z0-9_-] — some start with '-'
+    (e.g. '-xvOxbvnXuk'), which argparse reads as flags. Rewrite such IDs as
+    youtu.be URLs (lossless) so they parse as positional args."""
+    out = []
+    for arg in argv:
+        if re.fullmatch(r"-[A-Za-z0-9_-]{10}", arg):
+            out.append(f"https://youtu.be/{arg}")
+        else:
+            out.append(arg)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description="YouTube research via yt-dlp (no API key).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2300,7 +2317,7 @@ def main():
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_track)
 
-    a = ap.parse_args()
+    a = ap.parse_args(_normalize_argv(sys.argv[1:]))
     a.func(a)
 
 

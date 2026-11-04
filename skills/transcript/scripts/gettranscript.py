@@ -164,6 +164,19 @@ def to_text(segs):
     return " ".join(s["text"] for s in segs)
 
 
+def _normalize_argv(argv):
+    """YouTube video IDs are 11 chars from [A-Za-z0-9_-] — some start with '-'
+    (e.g. '-xvOxbvnXuk'), which argparse reads as flags. Rewrite such IDs as
+    youtu.be URLs (lossless) so they parse as positional args."""
+    out = []
+    for arg in argv:
+        if re.fullmatch(r"-[A-Za-z0-9_-]{10}", arg):
+            out.append(f"https://youtu.be/{arg}")
+        else:
+            out.append(arg)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description="Fetch a YouTube transcript via yt-dlp (no API key).")
     ap.add_argument("url", help="YouTube URL or 11-char video ID")
@@ -174,7 +187,7 @@ def main():
     ap.add_argument("--all-langs", action="store_true",
                     help="Fetch ALL available subtitle tracks (manual + auto) and return all in JSON")
     ap.add_argument("--no-meta", action="store_true", help="Skip metadata lookup (faster)")
-    args = ap.parse_args()
+    args = ap.parse_args(_normalize_argv(sys.argv[1:]))
 
     try:
         import yt_dlp  # noqa: F401  (probe that it's installed)

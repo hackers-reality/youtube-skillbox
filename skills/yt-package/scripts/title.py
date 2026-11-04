@@ -253,6 +253,12 @@ def score_package(title: str, thumb_text: str = "", keyword: str = "") -> Dict:
         "combined_score": combined,
         "title": title_result,
         "thumbnail": thumb_result,
+        "thumbnail_evaluated": bool(thumb_text),
+        "thumbnail_basis": "user_supplied_text" if thumb_text else "none",
+        "thumbnail_note": ("Thumbnail text was user-supplied. This is NOT a visual evaluation of "
+                           "the actual thumbnail image.") if thumb_text else
+                          "No thumbnail text was supplied — thumbnail was NOT evaluated.",
+        "heuristic_note": "Scores are heuristic signals, not predictions of CTR or ranking.",
         "verdict": "SHIP" if combined >= 70 else "REVISE" if combined >= 50 else "REWORK"
     }
 
