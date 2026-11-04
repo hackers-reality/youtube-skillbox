@@ -119,11 +119,15 @@ def parse_time_to_seconds(time_str: str) -> float:
             return 0.0
 
 
+def _is_absolute_retention(points: List[Dict]) -> bool:
+    """Absolute audience retention can exceed 100% (loops/replays). Relative retention never does."""
+    return any(p.get("retention_pct", 0) > 100 for p in points)
+
+
 def detect_hook_leak(points: List[Dict]) -> Dict:
     """Detect hook leak (first 30% of video or first 30 seconds)."""
     if not points:
         return {"leak_pct": 0, "severity": "unknown", "details": "No data", "start_retention": 0, "min_early_retention": 0, "time_unit": "s", "time_desc": "30s"}
-    
     # Check if time is in percentage (0-100) or seconds
     # Use original_time_is_pct to determine the original unit
     time_is_pct = points[0].get("original_time_is_pct", False)
@@ -153,17 +157,22 @@ def detect_hook_leak(points: List[Dict]) -> Dict:
     start_retention = points[0]["retention_pct"] if points else 100
     min_early = min(p["retention_pct"] for p in early_points)
     leak = start_retention - min_early
-    
-    severity = "healthy" if leak < 25 else "moderate" if leak < 40 else "severe"
-    
+
+    absolute = _is_absolute_retention(early_points)
+    severity = "n/a (absolute retention)" if absolute else (
+        "healthy" if leak < 25 else "moderate" if leak < 40 else "severe")
+
     return {
         "leak_pct": round(leak, 1),
         "severity": severity,
         "start_retention": start_retention,
         "min_early_retention": min_early,
+        "absolute_retention": absolute,
         "time_unit": time_unit,
         "time_desc": time_desc,
-        "details": f"Lost {leak:.1f}% in first {time_desc} ({severity})"
+        "details": (f"Absolute audience retention (values >100% = loops/replays); cliff drops below are meaningful, but leak/slide ratios are not. "
+                    f"Lost {leak:.1f}% in first {time_desc} ({severity})") if absolute else
+                   f"Lost {leak:.1f}% in first {time_desc} ({severity})"
     }
 
 
@@ -201,12 +210,17 @@ def detect_slide(points: List[Dict], window: int = 30) -> Dict:
         return {"slide_pct_per_min": 0, "severity": "unknown"}
     
     avg_slide = sum(slopes) / len(slopes)
-    severity = "healthy" if avg_slide < 1 else "moderate" if avg_slide < 3 else "severe"
-    
+    absolute = _is_absolute_retention(points)
+    severity = "n/a (absolute retention)" if absolute else (
+        "healthy" if avg_slide < 1 else "moderate" if avg_slide < 3 else "severe")
+
     return {
         "slide_pct_per_min": round(avg_slide, 2),
         "severity": severity,
-        "details": f"Loses {avg_slide:.1f}% per minute on average ({severity})"
+        "absolute_retention": absolute,
+        "details": (f"Absolute audience retention (values >100% = loops/replays); slide rate not meaningful. "
+                    f"Loses {avg_slide:.1f}% per minute on average ({severity})") if absolute else
+                   f"Loses {avg_slide:.1f}% per minute on average ({severity})"
     }
 
 
@@ -216,7 +230,7 @@ def correlate_with_transcript(cliffs: List[Dict], transcript_path: str) -> List[
         return cliffs
     
     try:
-        with open(transcript_path, 'r', encoding='utf-8') as f:
+        with open(transcript_path, 'r', encoding='utf-8-sig') as f:
             transcript = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return cliffs
@@ -252,9 +266,9 @@ def main():
     parser = argparse.ArgumentParser(description="Analyze YouTube retention CSV")
     parser.add_argument("csv", help="Path to YouTube Studio audience-retention CSV export")
     parser.add_argument("--transcript", help="Optional transcript JSON to correlate cliffs")
-    parser.add_argument("--threshold", type=float, default=5.0, help="Cliff detection threshold (% drop)")
+    parser.add_argument("--threshold", type=float, default=5.0, help="Cliff detection threshold (percent drop)")
     parser.add_argument("--json", action="store_true", help="Output JSON")
-    parser.add_argument("--duration", type=int, help="Video duration in seconds (converts % positions to seconds)")
+    parser.add_argument("--duration", type=int, help="Video duration in seconds (converts percentage positions to seconds)")
     args = parser.parse_args()
 
     # Parse CSV

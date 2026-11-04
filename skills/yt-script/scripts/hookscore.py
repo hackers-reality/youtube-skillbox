@@ -234,7 +234,7 @@ def main():
 
     # Load transcript
     if args.input.endswith(".json"):
-        with open(args.input, 'r', encoding='utf-8') as f:
+        with open(args.input, 'r', encoding='utf-8-sig') as f:
             data = json.load(f)
         transcript = data.get("transcript", data.get("transcripts", []))
         if isinstance(transcript, dict) and "transcript" in transcript:

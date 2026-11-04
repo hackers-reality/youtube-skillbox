@@ -267,7 +267,7 @@ def main():
     args = parser.parse_args()
 
     if args.file:
-        with open(args.file, 'r') as f:
+        with open(args.file, 'r', encoding='utf-8-sig') as f:
             data = json.load(f)
         titles = data.get("titles", [])
         results = []

@@ -143,6 +143,9 @@ python skills/yt-retention/scripts/retention.py retention.csv --json
 | Missing `--json` | Parsing text output | Always use `--json` for structured output |
 | Missing `--all-langs` | `python skills/transcript/scripts/gettranscript.py "id" --format json` | Use `--all-langs`: `python skills/transcript/scripts/gettranscript.py "id" --format json --all-langs` |
 | Missing `--json` on transcript | `python skills/transcript/scripts/gettranscript.py "id"` | Use `--format json`: `python skills/transcript/scripts/gettranscript.py "id" --format json --all-langs` |
+| PowerShell `Out-File -Encoding utf8` writes BOM | `... | Out-File -Encoding utf8 file.json` → then `json.load()` crashes with "Unexpected UTF-8 BOM" | Use Python to write files: `python -c "open(r'file.json','w',encoding='utf-8').write(out)"`, or read with BOM-tolerant code (scripts here already use `utf-8-sig`) |
+| Windows cp1252 default encoding | `open(path)` without encoding → `UnicodeDecodeError` on emoji/smart quotes | Use `open(path, encoding='utf-8')` (or `utf-8-sig` for Windows-authored files) |
+| **Truncating a file before reading it** | `open(p,'w').write(open(p,encoding='utf-8-sig').read())` — deletes the file! | Read first, then write: `data = open(p, encoding='utf-8-sig').read(); open(p,'w',encoding='utf-8').write(data)` |
 
 ---
 
@@ -152,7 +155,7 @@ python skills/yt-retention/scripts/retention.py retention.csv --json
 |-------|-------|-------|--------|
 | 1 | youtube | @handle | Channel data (sections, videos, home, profile) |
 | 2 | transcript | Top 3 video IDs | Full transcripts (JSON + timestamps) |
-| 3 | yt-script | Transcripts | Hook scores (0-100) per video |
+| 3 | yt-script | Transcripts | Hook metrics (words/sec, questions, numbers, second-person, etc.) per video |
 | 4 | yt-package | Titles + hook scores | Title/thumbnail scores + briefs |
 | 5 | yt-seo | Niche + target video | Keywords, competition scores, scorecards |
 | 6 | yt-viral | Channel + niche | Outliers (views/subs ratio), competitor gaps |
@@ -206,7 +209,7 @@ Output: single biggest fix, 3 working things, what NOT to do.
 |-------|-------|--------|
 | 1 | youtube | Channel profile, videos list, sections, home tab data |
 | 2 | transcript | Transcript JSON per video |
-| 3 | yt-script | Hook score 0-100 per video |
+| 3 | yt-script | Hook metrics per video (raw stats, not a 0-100 score) |
 | 4 | yt-package | Title score 0-100 per video |
 | 5 | yt-seo | Keywords, competition score, SEO scorecard |
 | 6 | yt-viral | Outlier videos (views/subs ratio), velocity |
