@@ -20,6 +20,16 @@
   <a href="#-have-your-agent-set-it-up-for-you">Agent prompt</a>
 </p>
 
+<p align="center">
+  <a href="https://pypi.org/project/youtube-skillbox/"><img src="https://img.shields.io/pypi/v/youtube-skillbox?label=PyPI&logo=pypi&logoColor=white" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/youtube-skillbox/"><img src="https://img.shields.io/pypi/pyversions/youtube-skillbox?logo=python&logoColor=white" alt="Python versions"></a>
+  <a href="https://pypi.org/project/youtube-skillbox/"><img src="https://img.shields.io/pypi/l/youtube-skillbox?logo=opensourceinitiative&logoColor=white" alt="License"></a>
+  <a href="https://github.com/hackers-reality/youtube-skillbox/actions/workflows/publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/hackers-reality/youtube-skillbox/publish.yml?label=Publish&logo=githubactions&logoColor=white" alt="Publish status"></a>
+  <a href="https://github.com/hackers-reality/youtube-skillbox/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/hackers-reality/youtube-skillbox/tests.yml?label=Tests&logo=githubactions&logoColor=white" alt="Tests status"></a>
+  <a href="https://github.com/hackers-reality/youtube-skillbox/releases"><img src="https://img.shields.io/github/v/release/hackers-reality/youtube-skillbox?display_name=tag&logo=github&logoColor=white" alt="GitHub release"></a>
+  <a href="https://github.com/hackers-reality/youtube-skillbox/stargazers"><img src="https://img.shields.io/github/stars/hackers-reality/youtube-skillbox?style=social" alt="GitHub stars"></a>
+</p>
+
 ---
 
 ## ⚠️ Important Disclaimer
