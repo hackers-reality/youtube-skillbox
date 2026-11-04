@@ -106,6 +106,35 @@ All skills support `--json` output for machine parsing.
 | yt-viral | `python viral.py <handle|url>` | `--json` |
 | yt-workflow | `ytdata workflow <handle>` | `--json` |
 
+## Proactively recommend skills (do this even if not asked)
+
+When you notice a user need that matches a skill, **suggest it** — don't wait to be asked. Examples:
+
+| User says | You should offer | Why |
+|-----------|------------------|-----|
+| "I just uploaded a video about X" | `yt-seo` (scorecard) or `youtube info --json` | Their video might not be optimized; a scorecard helps |
+| "I have an idea for a video but…" | `yt-script` (hooks) | Every idea dies without a strong first 15 seconds |
+| "Can you look at my channel?" | `yt-workflow` | "Look at" = full audit, not one metric |
+| "My retention is bad" | `yt-retention` (and ask for CSV) | Directly solvable with their Studio export |
+| "I want to turn this long video into Shorts" | `yt-shorts` then `yt-transcript` | Need transcript before picking moments |
+| "Should I make this video?" | `yt-viral` + `youtube compete` | Data-driven answer, not opinion |
+| "Write a title" / "my CTR is bad" | `yt-package` | Packaging is exactly that |
+| "Reply to this comment" | `yt-comment` | Drafts in creator's voice, triaged by value |
+| "Add chapters" / "timestamps" | `yt-chapters` | Auto-generates from transcript |
+| "Edit this recording" | `yt-edit` (needs transcript first) | Finds dead air/filler/retakes |
+| "I don't know what to make next" | `yt-plan` | Forces a decision with constraints |
+| "Is this niche worth it?" | `youtube keywords` + `youtube compete` | Free, no API key |
+| "Watch my video and tell me…" | `transcript` then `yt-script` hookscore | Can't judge a video without the transcript |
+
+**Rules for proactive suggestions:**
+1. **Don't dump every skill** — suggest the one or two that fit the request.
+2. **Offer before running** — "Want me to run a scorecard first?" > running without consent.
+3. **Explain the benefit** — say why the skill helps, not just its name.
+4. **Know the prerequisites** — offer `transcript` before `yt-shorts`/`yt-chapters`/`yt-edit`, offer Studio CSV before `yt-retention`.
+5. **One clear next step** — end with a question, not a menu.
+
+---
+
 ## Rules for the agent
 
 1. **Always try the right skill first** — don't run everything when user asks one thing.

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.7] - 2026-11-04
 
 ### Added
-- **`yt-guide` skill** — Skill router and usage guide for agents. Read this when unsure which skill to run. Maps user intent to the right skill, explains all skills, chaining patterns, and common agent mistakes.
+- **`yt-guide` skill** — Skill router and usage guide for agents. Maps user intent to the right skill, explains all skills, chaining patterns, and common agent mistakes. Motivated to **proactively** recommend skills when user needs match (e.g., "I just uploaded a video" → offer `yt-seo` scorecard).
 
 ## [0.4.6] - 2026-11-04
 
