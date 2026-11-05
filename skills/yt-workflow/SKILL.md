@@ -5,6 +5,8 @@ description: Chain youtube → transcript → yt-script → yt-package → yt-se
 
 # yt-workflow: Channel Analysis Pipeline
 
+> **Artifact Destination Policy applies.** This workflow inherits the mandatory rule owned by `yt-guide` ("Artifact Destination Policy"): ask the user for the destination directory before any file is written; absolute paths only; manifests/transcripts/CSVs/intermediates all live inside it; no Temp/Desktop/Downloads/cwd fallback; never overwrite without permission; verify and report absolute artifact paths. See `yt-guide` for the full rule.
+
 ## ⚡ Quick Start: Installed CLI
 
 After installing the package (`pip install -e .`), the **`ytdata`** command is available globally. Use it directly instead of `python skills/youtube/scripts/ytdata.py`:
@@ -159,9 +161,15 @@ python skills/yt-retention/scripts/retention.py retention.csv --json
 
 ---
 
+## Artifact destination (mandatory — inherited from yt-guide)
+
+**Ask the user for the destination directory before Phase 1 if one was not established this session.** Every file this workflow writes — `manifest.json`, transcripts, CSVs, scorecards, logs, intermediates — goes inside it. Absolute paths only. No Temp/Desktop/Downloads/cwd defaults, no overwrite without permission, and verify + report every artifact path at the end.
+
+If the destination is inaccessible, **stop and ask** — do not fall back silently.
+
 ## Execution manifest (required)
 
-For every audit, produce a manifest — a machine-readable JSON record of each phase. Save it as `manifest.json` in your temp working dir and use it to write the final answer.
+For every audit, produce a manifest — a machine-readable JSON record of each phase. Save it as `manifest.json` **inside the user-selected artifact destination** (e.g. `D:/YouTube/Audits/November-2026/manifest.json`) and use it to write the final answer.
 
 Example manifest:
 
@@ -169,8 +177,11 @@ Example manifest:
 {
   "mode": "strict",
   "channel": "@Moments_Unscriptedorignal",
+  "artifact_destination": "D:/YouTube/Audits/November-2026",
+  "artifact_policy": "user_selected",
+  "artifacts_verified": true,
   "phases": {
-    "phase1": {"skill": "youtube", "command": "ytdata sections ...", "exit_code": 0, "status": "success", "artifact": "sections.json"},
+    "phase1": {"skill": "youtube", "command": "ytdata sections ...", "exit_code": 0, "status": "success", "artifact": "D:/YouTube/Audits/November-2026/sections.json"},
     "phase2": {"skill": "transcript", "command": "gettranscript.py 9NDb3RH9N7M --format json", "exit_code": 429, "status": "failed"}
   },
   "claims": [
@@ -182,7 +193,7 @@ Example manifest:
 Then (optionally but recommended) validate it:
 
 ```bash
-python skills/yt-workflow/scripts/audit_manifest.py --manifest manifest.json --mode strict
+python skills/yt-workflow/scripts/audit_manifest.py --manifest D:/YouTube/Audits/November-2026/manifest.json --mode strict --destination D:/YouTube/Audits/November-2026
 ```
 
 **Manifest rules:**
@@ -212,15 +223,17 @@ Never present a **HYPOTHESIS** as **MEASURED**. Never invent numbers, views, sco
 
 1. **Phase 0 first** — consult yt-guide before selecting the chain.
 2. **Ask for audit mode** if the user didn't specify: strict (default) or partial.
-3. **Strict mode** — a FAILED required phase (1–6) stops the audit immediately. Report which phase failed and why. Do **not** continue to Phase N+1.
-4. **Partial mode** — continue independent phases; every failure stays listed; final answer labeled `PARTIAL AUDIT`.
-5. **Pass JSON between phases** — use `--json` flags, parse output.
-6. **Invoke the actual skill** — run the skill's own scripts (hookscore for yt-script, title.py for yt-package). Using `ytdata` means the **youtube data skill** ran, nothing else.
-7. **Record the manifest** — fill `manifest.json` as you go; report it at the end.
-8. **Cache intermediates** — save JSON to temp files, pass paths forward.
-9. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the output and continue. Don't halt the pipeline.
-10. **Never fabricate** — no invented view counts, no invented thumbnail text, no "I saw the thumbnail" claims from text.
-11. **Clean up downloaded artifacts** — yt-dlp may download thumbnail files (.webp, .jpg) and temp files. After each phase, delete any downloaded media files to avoid filling user disk space. Use `--no-thumbnails` flag when possible, or clean up `*.webp`, `*.jpg`, `*.mp4` files in the working directory after each command.
+3. **Artifact destination first** — ask the user for the destination directory before anything writes a file (see "Artifact destination" above). Ask once; reuse it for the whole run.
+4. **Subagents only if the harness exposes them** — inspect the actual tool set; delegate only when a real delegation/subagent tool exists. Otherwise proceed sequentially and never claim subagents ran. Be conservative with parallel YouTube requests (HTTP 429 throttle).
+5. **Strict mode** — a FAILED required phase (1–6) stops the audit immediately. Report which phase failed and why. Do **not** continue to Phase N+1.
+6. **Partial mode** — continue independent phases; every failure stays listed; final answer labeled `PARTIAL AUDIT`.
+7. **Pass JSON between phases** — use `--json` flags, parse output.
+8. **Invoke the actual skill** — run the skill's own scripts (hookscore for yt-script, title.py for yt-package). Using `ytdata` means the **youtube data skill** ran, nothing else.
+9. **Record the manifest** — fill `manifest.json` (inside the artifact destination) as you go; report it at the end.
+10. **Write intermediates into the artifact destination** — saved JSON passes paths forward, nothing lands in Temp/cwd.
+11. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the output and continue. Don't halt the pipeline.
+12. **Never fabricate** — no invented view counts, no invented thumbnail text, no "I saw the thumbnail" claims from text.
+13. **Clean up downloaded artifacts inside the destination** — yt-dlp may download thumbnail files (.webp, .jpg) and temp files. After each phase, delete any downloaded media files to avoid filling the artifact destination with junk. Use `--no-thumbnails` where supported, or clean up `*.webp`, `*.jpg`, `*.mp4` in the destination after each command — then re-verify the destination.
 
 ---
 
@@ -241,6 +254,8 @@ Never present a **HYPOTHESIS** as **MEASURED**. Never invent numbers, views, sco
 | **ytdata ≠ creator skills** | "Phase 3/4/5 done" because you ran ytdata commands | yt-script/yt-package/yt-seo/yt-viral only ran if you opened their SKILL.md and ran their scripts |
 | **Thumbnail text = thumbnail image** | "I analyzed your thumbnail; contrast is weak" | Text-only scoring says nothing about the actual image. Mark `thumbnail_evaluated: false` |
 | **Strict audit that "completed"** | Transcript failed (429) yet report says "full audit done" | Strict stops at the failure. Partial labels everything `PARTIAL AUDIT` |
+| **Temp-directory fallback** | Saving `manifest.json` or transcripts to Temp/cwd/Downloads after the user picked a destination (or without asking) | Stop and ask for the destination first; everything lives inside it; absolute paths; verify + report artifacts |
+| **Overwriting without permission** | Writing over an existing `manifest.json` / artifact | Ask first — never overwrite without explicit permission |
 | **Failure = success** | Non-zero exit code, phase marked "done" | Exit code governs status; a failed phase is never success |
 | **Heuristic = prediction** | "This title will 3x your CTR" | Heuristic score is a signal, not a forecast. Say "heuristic score: 47/100" |
 | **Invented counts** | "all 18 titles were REWORK" when the output had REVISE+REWORK | Quote the exact counts from tool output |
@@ -267,6 +282,8 @@ Never present a **HYPOTHESIS** as **MEASURED**. Never invent numbers, views, sco
 ```text
 Run a full channel analysis on @Moments_Unscriptedorignal. Mode: strict.
 
+Before any file is written: ask the user for the artifact destination
+directory (e.g. D:/YouTube/Audits/November-2026) and reuse it for the whole run.
 Phase 0: load yt-guide, confirm the chain.
 Phase 1: sections, channel, latest, home, profile (--json)
 Phase 2: transcripts for top 3 videos (--format json --all-langs)
@@ -276,7 +293,7 @@ Phase 5: youtube keywords (opportunity) + compete (competition) + scorecard
 Phase 6: youtube outliers
 Phase 7 (optional): if user provides Studio CSV, run retention.py
 
-Maintain manifest.json as you go. Label every claim MEASURED/INFERRED/HYPOTHESIS.
+Maintain manifest.json inside the destination as you go. Label every claim MEASURED/INFERRED/HYPOTHESIS.
 If any required phase fails: strict → stop and report FAILED at that phase.
 If user asked for partial: continue, label final answer PARTIAL AUDIT.
 Final answer = ONE biggest fix, 3 working things, what NOT to do.

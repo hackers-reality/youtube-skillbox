@@ -108,3 +108,7 @@ Both former yt-dlp gaps are filled free: `posts` (community feed via raw scrape 
 - Pair with `transcript`: research with this, then pull text with `transcript`.
 - Prefer `info` when you need real numbers (views/likes) for a single video — `search`/`channel` counts are sometimes approximations.
 - For a channel you already have the URL for, `channel` accepts it directly.
+
+
+---
+> **Artifact destination applies.** If this skill writes any file (manifest, transcript, CSV, report, log, temp output), the user-selected artifact destination governs it — see yt-guide "Artifact Destination Policy". Ask first if not established; absolute paths only; everything inside that directory; never Temp/Desktop/Downloads/cwd; never overwrite without permission; verify and report artifact paths.

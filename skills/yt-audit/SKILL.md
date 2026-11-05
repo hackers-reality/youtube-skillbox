@@ -62,3 +62,6 @@ python skills/yt-retention/scripts/retention.py retention.csv --json
 
 - See `skills/yt-workflow/SKILL.md` for the complete pipeline documentation
 - See `skills/youtube/scripts/ytdata.py` for the shared data module
+
+---
+> **Artifact destination applies.** If this skill writes any file (manifest, transcript, CSV, report, log, temp output), the user-selected artifact destination governs it — see yt-guide "Artifact Destination Policy". Ask first if not established; absolute paths only; everything inside that directory; never Temp/Desktop/Downloads/cwd; never overwrite without permission; verify and report artifact paths.

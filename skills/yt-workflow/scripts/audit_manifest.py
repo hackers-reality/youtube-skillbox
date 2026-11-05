@@ -17,15 +17,16 @@ running yt-workflow. It exists to make agents HONEST:
 
 Library usage (from tests):
   from audit_manifest import AuditManifest
-  m = AuditManifest("strict", "@handle")
-  m.record("phase1", "youtube", "ytdata sections ...", exit_code=0, artifact="sections.json")
+  m = AuditManifest("strict", "@handle", artifact_destination="D:/YouTube/Audits/November-2026")
+  m.record("phase1", "youtube", "ytdata sections ...", exit_code=0, artifact="D:/YouTube/Audits/November-2026/sections.json")
   m.finalize()  # -> dict summary
 
 CLI usage:
-  python audit_manifest.py --manifest manifest.json --mode strict
+  python audit_manifest.py --manifest manifest.json --mode strict --destination D:/YouTube/Audits/November-2026
 """
 import argparse
 import json
+import os
 import sys
 
 REQUIRED_PHASES = ["phase1", "phase2", "phase3", "phase4", "phase5", "phase6"]
@@ -49,7 +50,7 @@ def _status_from_exit_code(exit_code):
 class AuditManifest:
     """Collect phase records and finalize an audit honestly."""
 
-    def __init__(self, mode="strict", channel=None):
+    def __init__(self, mode="strict", channel=None, artifact_destination=None):
         if mode not in ("strict", "partial"):
             raise ValueError("mode must be 'strict' or 'partial'")
         self.mode = mode
@@ -57,6 +58,90 @@ class AuditManifest:
         self.phases = {}
         self.artifacts = {}
         self.claims = []
+        self.artifact_destination = None
+        self.artifact_policy = "not_set"
+        self.artifacts_verified = False
+        if artifact_destination:
+            self.set_artifact_destination(artifact_destination)
+
+    # ---- Artifact destination policy (see yt-guide SKILL.md — the owning rule) ----
+
+    def set_artifact_destination(self, dest, policy="user_selected"):
+        """Select & validate the user-chosen destination directory.
+
+        Rules enforced here:
+        - The path must be absolute.
+        - It must exist as a directory, or be creatable (missing parent fails).
+        - Inaccessible locations raise ValueError — the agent must stop and ask,
+          never silently fall back to Temp/Desktop/Downloads/cwd.
+        """
+        if not isinstance(dest, str) or not dest.strip():
+            raise ValueError("artifact_destination must be a non-empty absolute path")
+        if not os.path.isabs(dest):
+            raise ValueError(f"artifact_destination must be absolute, got: {dest!r}")
+        realpath = os.path.realpath(dest)
+        if os.path.exists(realpath) and not os.path.isdir(realpath):
+            raise ValueError(f"artifact destination is not a directory: {realpath}")
+        try:
+            os.makedirs(realpath, exist_ok=True)
+        except OSError as e:
+            raise ValueError(f"artifact destination inaccessible: {e}")
+        self.artifact_destination = realpath
+        self.artifact_policy = policy
+        return realpath
+
+    def _inside_destination(self, path):
+        d = self.artifact_destination
+        return path == d or path.startswith(d + os.sep)
+
+    def _resolve_artifact(self, artifact):
+        """Validate an artifact path against the destination policy.
+
+        Requires: artifact destination already set; path absolute; resolves
+        inside the destination (rejects `..` escapes and absolute substitution).
+        """
+        if self.artifact_destination is None:
+            raise ValueError(
+                "artifact destination not set — ask the user for the destination directory first; "
+                "do not default to Temp/Desktop/Downloads/cwd")
+        if not isinstance(artifact, str) or not artifact.strip():
+            raise ValueError("artifact path must be a non-empty absolute path")
+        if not os.path.isabs(artifact):
+            raise ValueError(f"artifact path must be absolute: {artifact!r}")
+        resolved = os.path.realpath(artifact)
+        if not self._inside_destination(resolved):
+            raise ValueError(
+                f"artifact escapes selected destination: {artifact!r} "
+                f"(destination is {self.artifact_destination})")
+        return resolved
+
+    def ensure_artifact_path(self, path, overwrite=False):
+        """Pre-write validation for a NEW artifact file.
+
+        - Absolute path required; must resolve inside the destination.
+        - Refuses to overwrite an existing file unless overwrite=True
+          (caller must have explicit user permission).
+        """
+        resolved = self._resolve_artifact(path)
+        if os.path.exists(resolved) and not overwrite:
+            raise FileExistsError(
+                f"refusing to overwrite existing file without permission: {resolved}")
+        return resolved
+
+    def verify_artifacts(self):
+        """Confirm every recorded artifact exists and stays inside the destination."""
+        if self.artifact_destination is None:
+            self.artifacts_verified = False
+            return self.artifacts_verified
+        for phase, p in self.artifacts.items():
+            if not self._inside_destination(p):
+                self.artifacts_verified = False
+                return self.artifacts_verified
+            if not os.path.exists(p):
+                self.artifacts_verified = False
+                return self.artifacts_verified
+        self.artifacts_verified = True
+        return self.artifacts_verified
 
     def record(self, phase, skill, command, exit_code=None, status=None,
                artifact=None, notes=""):
@@ -84,6 +169,8 @@ class AuditManifest:
             "notes": notes,
         }
         if artifact:
+            if self.artifact_destination is not None:
+                artifact = self._resolve_artifact(artifact)
             self.artifacts[phase] = artifact
         return self.phases[phase]
 
@@ -126,9 +213,14 @@ class AuditManifest:
         else:
             overall = "COMPLETE"
             stopped_at = None
+        artifacts_verified = self.verify_artifacts() if self.artifact_destination else False
         return {
             "mode": self.mode,
             "channel": self.channel,
+            "artifact_destination": self.artifact_destination,
+            "artifact_policy": self.artifact_policy,
+            "artifact_list": [rec["artifact"] for rec in self.phases.values() if rec.get("artifact")],
+            "artifacts_verified": artifacts_verified,
             "overall": overall,
             "stopped_at_phase": stopped_at,
             "required_failures": failed,
@@ -151,6 +243,12 @@ class AuditManifest:
 def summarize_text(result):
     """Human-readable summary for terminal output / agent report."""
     lines = [f"AUDIT MODE: {result['mode'].upper()}  |  OVERALL: {result['overall']}"]
+    lines.append(f"ARTIFACT DESTINATION: {result.get('artifact_destination') or 'NOT SET'}  "
+                 f"(policy: {result.get('artifact_policy')}, verified: {result.get('artifacts_verified')})")
+    if result.get("artifact_list"):
+        lines.append("ARTIFACTS:")
+        for p in result["artifact_list"]:
+            lines.append(f"  - {p}")
     if result["stopped_at_phase"]:
         lines.append(f"STOPPED AT: {result['stopped_at_phase']} (strict mode)")
     if result["required_failures"]:
@@ -171,13 +269,16 @@ def main():
     ap.add_argument("--manifest", required=True, help="Path to manifest JSON produced by the agent")
     ap.add_argument("--mode", default=None, choices=["strict", "partial"],
                     help="Override mode stored in manifest")
+    ap.add_argument("--destination", default=None,
+                    help="User-selected artifact destination directory (absolute path)")
     args = ap.parse_args()
 
     with open(args.manifest, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
 
     m = AuditManifest(args.mode or data.get("mode", "strict"),
-                      data.get("channel"))
+                      data.get("channel"),
+                      artifact_destination=args.destination or data.get("artifact_destination"))
     for ph in REQUIRED_PHASES + list(OPTIONAL_PHASES):
         rec = data.get("phases", {}).get(ph)
         if rec:
