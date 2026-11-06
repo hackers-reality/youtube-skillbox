@@ -51,9 +51,115 @@ for stream in (sys.stdout, sys.stderr):
         pass
 
 
-def run_ytdlp(args):
+class _YtdlpTimeoutProc:
+    """Stand-in CompletedProcess returned when a yt-dlp call exceeds its timeout."""
+    def __init__(self, timeout):
+        self.returncode = 124
+        self.stdout = ""
+        self.stderr = f"yt-dlp timed out after {timeout}s"
+
+
+def run_ytdlp(args, timeout=60):
     cmd = [sys.executable, "-m", "yt_dlp"] + args + ["--no-warnings", "--no-write-thumbnail"]
-    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return _YtdlpTimeoutProc(timeout)
+
+
+def _fetch_video_detail(vid):
+    """Full-metadata JSON for one video (single yt-dlp spawn, bounded time)."""
+    detail = run_ytdlp(["--skip-download", "--dump-single-json",
+                        f"https://www.youtube.com/watch?v={vid}"], timeout=60)
+    if getattr(detail, "returncode", 1) != 0:
+        return None, (getattr(detail, "stderr", "") or "yt-dlp failed").strip().splitlines()[-1:]
+    try:
+        return json.loads(detail.stdout), []
+    except (json.JSONDecodeError, AttributeError):
+        return None, ["unparsable yt-dlp output"]
+
+
+def _enrich_entries(entries, full_meta=False, workers=int(os.environ.get("YTDLP_WORKERS", "5")),
+                    total_budget=float(os.environ.get("YTDLP_TOTAL_BUDGET", "75")),
+                    timeout_per=float(os.environ.get("YTDLP_TIMEOUT", "60"))):
+    """Enrich flat entries with per-video details CONCURRENTLY.
+
+    Previous behaviour spawned N sequential yt-dlp processes with no timeout:
+    20 videos x ~8s sequential = the observed 180s timeout (and an unbounded
+    hang under DNS failure / 429). Now: bounded workers, per-video timeout,
+    a TOTAL budget above which enrichment stops and marks partial explicitly.
+
+    Partial failures are explicit to JSON consumers: each failed entry gets
+    "enrichment_status": "failed" + "enrichment_error", and the caller can
+    inspect `enrichment_summary` (succeeded/failed/total/budget) embedded in
+    the returned list via the module-level LAST_ENRICHMENT_SUMMARY.
+    """
+    import time as _time
+    global LAST_ENRICHMENT_SUMMARY
+    vids = [e.get("id") for e in entries if e.get("id")]
+    if not vids:
+        LAST_ENRICHMENT_SUMMARY = {"succeeded": 0, "failed": 0, "total": 0, "budget_s": total_budget}
+        return entries
+    results = {}
+    errors = []
+    start = _time.monotonic()
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=min(workers, len(vids) or 1)) as pool:
+        futs = {pool.submit(_fetch_video_detail, v): v for v in vids}
+        try:
+            for fut in as_completed(futs, timeout=total_budget):
+                vid = futs[fut]
+                try:
+                    d, err = fut.result()
+                except Exception as exc:  # subprocess / spawn raised
+                    d, err = None, [str(exc)]
+                if d is None:
+                    errors.append((vid, err[0] if err else "fetch failed"))
+                else:
+                    results[vid] = d
+                if (_time.monotonic() - start) > total_budget:
+                    break
+        except Exception:
+            # Total budget exceeded: remaining futures are abandoned, marked partial.
+            errors.append(("TOTAL_BUDGET", f"enrichment exceeded {total_budget:g}s budget; partial results kept"))
+    for e in entries:
+        d = results.get(e.get("id"))
+        if d:
+            e["enrichment_status"] = "succeeded"
+            e["duration"] = d.get("duration") or e.get("duration")
+            e["duration_string"] = d.get("duration_string") or e.get("duration_string")
+            if full_meta:
+                e.update({
+                    "upload_date": d.get("upload_date"),
+                    "live_status": d.get("live_status"),
+                    "tags": d.get("tags"),
+                    "likes": d.get("like_count"),
+                    "subscribers": d.get("channel_follower_count"),
+                    "categories": d.get("categories"),
+                    "description": (d.get("description") or "")[:500] or None,
+                    "channel_url": d.get("channel_url") or d.get("uploader_url"),
+                    "channel_is_verified": d.get("channel_is_verified"),
+                    "age_days": _parse_age_from_date(d.get("upload_date")),
+                })
+        else:
+            # Explicit partial-failure marker for JSON consumers (was stderr-only).
+            e["enrichment_status"] = "failed"
+            err_map = dict(errors)
+            e["enrichment_error"] = err_map.get(e.get("id"), "not attempted or budget exceeded")
+    for vid, msg in errors:
+        print(f"WARNING: duration enrichment failed ({vid}: {msg}); keeping flat fields", file=sys.stderr)
+    LAST_ENRICHMENT_SUMMARY = {
+        "succeeded": len(results),
+        "failed": len(errors) if errors and errors[0][0] == "TOTAL_BUDGET" else len([e for e in entries if e.get("enrichment_status") == "failed"]),
+        "total": len(vids),
+        "budget_s": total_budget,
+        "partial": any(e.get("enrichment_status") == "failed" for e in entries),
+        "errors": [f"{v}: {m}" for v, m in errors],
+    }
+    return entries
+
+
+LAST_ENRICHMENT_SUMMARY = {"succeeded": 0, "failed": 0, "total": 0, "budget_s": 75}
 
 
 # ---- Community posts via raw Innertube page scrape (no yt-dlp; it can't do this) ----
@@ -562,6 +668,9 @@ def slim(e):
         "upload_date": e.get("upload_date") or e.get("timestamp"),
         "live_status": e.get("live_status"),
         "age_days": e.get("age_days"),
+        "enrichment_status": e.get("enrichment_status"),
+        "enrichment_error": e.get("enrichment_error"),
+        "enrichment_summary": globals().get("LAST_ENRICHMENT_SUMMARY"),
     }
 
 
@@ -593,30 +702,9 @@ def cmd_search(a):
               f"not gl={a.gl}", file=sys.stderr)
         entries = dump_entries([f"ytsearch{a.limit}:{q}"])
     
-    # Enrich with full metadata if requested
+    # Enrich with full metadata if requested (concurrent, bounded; degrades)
     if getattr(a, "full_meta", False):
-        enriched = []
-        for e in entries[: a.limit]:
-            vid = e.get("id")
-            if vid:
-                detail = run_ytdlp(["--skip-download", "--dump-single-json", f"https://www.youtube.com/watch?v={vid}"])
-                if detail.returncode == 0:
-                    try:
-                        d = json.loads(detail.stdout)
-                        # Merge yt-dlp data (takes precedence for fields it has)
-                        e.update({
-                            "upload_date": d.get("upload_date"),
-                            "live_status": d.get("live_status"),
-                            "tags": d.get("tags"),
-                            "likes": d.get("like_count"),
-                            "subscribers": d.get("channel_follower_count"),
-                            "categories": d.get("categories"),
-                            "description": (d.get("description") or "")[:500] or None,
-                        })
-                    except json.JSONDecodeError:
-                        pass
-            enriched.append(e)
-        entries = enriched
+        entries = _enrich_entries(entries[: a.limit], full_meta=True)
     
     print_list([slim(e) for e in entries[: a.limit]], a.json)
 
@@ -629,33 +717,9 @@ def cmd_channel(a):
         base = base.rstrip("/").split("/videos")[0] + f"/{a.tab}"
     args = [base, "--playlist-items", f"1-{a.limit}"]
     entries = dump_entries(args)
-    # flat-playlist doesn't include duration; fetch per-video if --with-duration or --full-meta
+    # flat-playlist doesn't include duration; enrich per-video (concurrent, bounded)
     if getattr(a, "with_duration", False) or getattr(a, "full_meta", False):
-        for e in entries:
-            vid = e.get("id")
-            if vid:
-                detail = run_ytdlp(["--skip-download", "--dump-single-json", f"https://www.youtube.com/watch?v={vid}"])
-                if detail.returncode == 0:
-                    try:
-                        d = json.loads(detail.stdout)
-                        e["duration"] = d.get("duration")
-                        e["duration_string"] = d.get("duration_string")
-                        if getattr(a, "full_meta", False):
-                            # Merge yt-dlp data for full metadata
-                            e.update({
-                                "upload_date": d.get("upload_date"),
-                                "live_status": d.get("live_status"),
-                                "tags": d.get("tags"),
-                                "likes": d.get("like_count"),
-                                "subscribers": d.get("channel_follower_count"),
-                                "categories": d.get("categories"),
-                                "description": (d.get("description") or "")[:500] or None,
-                                "channel_url": d.get("channel_url") or d.get("uploader_url"),
-                                "channel_is_verified": d.get("channel_is_verified"),
-                                "age_days": _parse_age_from_date(d.get("upload_date")),
-                            })
-                    except json.JSONDecodeError:
-                        pass
+        entries = _enrich_entries(entries, full_meta=getattr(a, "full_meta", False))
     print_list([slim(e) for e in entries[: a.limit]], a.json)
 
 
@@ -666,33 +730,9 @@ def cmd_latest(a):
         base = base.rstrip("/") + "/videos"
     args = [base, "--playlist-items", f"1-{a.limit}"]
     entries = dump_entries(args)
-    # flat-playlist doesn't include duration; fetch per-video if --with-duration or --full-meta
+    # flat-playlist doesn't include duration; enrich per-video (concurrent, bounded)
     if getattr(a, "with_duration", False) or getattr(a, "full_meta", False):
-        for e in entries:
-            vid = e.get("id")
-            if vid:
-                detail = run_ytdlp(["--skip-download", "--dump-single-json", f"https://www.youtube.com/watch?v={vid}"])
-                if detail.returncode == 0:
-                    try:
-                        d = json.loads(detail.stdout)
-                        e["duration"] = d.get("duration")
-                        e["duration_string"] = d.get("duration_string")
-                        if getattr(a, "full_meta", False):
-                            # Merge yt-dlp data for full metadata
-                            e.update({
-                                "upload_date": d.get("upload_date"),
-                                "live_status": d.get("live_status"),
-                                "tags": d.get("tags"),
-                                "likes": d.get("like_count"),
-                                "subscribers": d.get("channel_follower_count"),
-                                "categories": d.get("categories"),
-                                "description": (d.get("description") or "")[:500] or None,
-                                "channel_url": d.get("channel_url") or d.get("uploader_url"),
-                                "channel_is_verified": d.get("channel_is_verified"),
-                                "age_days": _parse_age_from_date(d.get("upload_date")),
-                            })
-                    except json.JSONDecodeError:
-                        pass
+        entries = _enrich_entries(entries, full_meta=getattr(a, "full_meta", False))
     print_list([slim(e) for e in entries[: a.limit]], a.json)
 
 
@@ -1744,6 +1784,7 @@ def cmd_keywords(a):
         if rec["question"]:
             score += 5
         rec["score"] = score
+        rec["opportunity_score"] = score  # higher = better opportunity (not difficulty)
         rows.append(rec)
     rows.sort(key=lambda r: (-r["score"], r["keyword"]))
     rows = rows[: a.limit]
@@ -1754,6 +1795,7 @@ def cmd_keywords(a):
     if a.json:
         print(json.dumps({"seed": seed, "gl": a.gl, "hl": a.hl, "sources": sorted(use),
                           "kl": kl, "queries": len(queries), "unique": len(stats),
+                          "score_meaning": "opportunity",
                           "keywords": rows}, ensure_ascii=False, indent=2))
         return
     print(f'Keyword ideas for "{seed}" — {len(stats)} unique from {len(queries)} queries '
@@ -1989,6 +2031,8 @@ def _serp_stats(entries, query, top=10):
     beatable = sum(1 for x in views if x < 10000)
     return {
         "score": round(score, 1),
+        "competition_score": round(score, 1),  # higher = HARDER (never interpret as opportunity)
+        "score_meaning": "competition_difficulty",
         "band": _difficulty_band(score),
         "scored": n,
         "median_views": int(_median(views)) if views else None,
@@ -2160,6 +2204,28 @@ def cmd_track(a):
             print(f"  {r['checked_at']}  {shown}")
 
 
+def _normalize_argv(argv):
+    """YouTube video IDs are 11 chars from [A-Za-z0-9_-]; some start with '-'
+    (e.g. '-xvOxbvnXuk'). argparse would parse such an ID as a flag, so a
+    SINGLE leading dash + 10 valid ID chars is rewritten as a youtu.be URL.
+
+    Rules:
+    - Any arg starting with '--' is ALWAYS treated as a flag, never an ID
+      (so --all-langs, --full-meta, --min-ratio are untouched).
+    - Only single-dash 11-char args that are valid IDs get rewritten.
+    - URLs, handles and ordinary flags pass through unchanged.
+    """
+    out = []
+    for arg in argv:
+        if arg.startswith("--"):
+            out.append(arg)
+        elif re.fullmatch(r"-[A-Za-z0-9_-]{10}", arg):
+            out.append(f"https://youtu.be/{arg}")
+        else:
+            out.append(arg)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description="YouTube research via yt-dlp (no API key).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2300,7 +2366,7 @@ def main():
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_track)
 
-    a = ap.parse_args()
+    a = ap.parse_args(_normalize_argv(sys.argv[1:]))
     a.func(a)
 
 

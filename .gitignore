@@ -17,7 +17,7 @@ assets/*.mp4
 assets/*.mov
 
 # Scratch space for probes/tests (never committed)
-tmp/
+/tmp/
 
 # OpenCode skills (local only)
 .opencode/skills/

@@ -5,9 +5,13 @@ description: Chain youtube → transcript → yt-script → yt-package → yt-se
 
 # yt-workflow: Channel Analysis Pipeline
 
+> **Artifact Destination Policy applies.** This workflow inherits the mandatory rule owned by `yt-guide` ("Artifact Destination Policy"): ask the user for the destination directory before any file is written; absolute paths only; manifests/transcripts/CSVs/intermediates all live inside it; no Temp/Desktop/Downloads/cwd fallback; never overwrite without permission; verify and report absolute artifact paths. See `yt-guide` for the full rule.
+
 ## ⚡ Quick Start: Installed CLI
 
 After installing the package (`pip install -e .`), the **`ytdata`** command is available globally. Use it directly instead of `python skills/youtube/scripts/ytdata.py`:
+
+> **Regression rule:** always execute from the repo root (`E:/youtube-skillbox` in a checkout) and verify the script path you ran is the working tree, not a stale installed copy under `~/.config/opencode/skills`. Confirm with `python -c "import pathlib; print(pathlib.Path('skills/youtube/scripts/ytdata.py').resolve())"` before trusting results.
 
 ```bash
 # Before (repo-root relative paths)
@@ -27,11 +31,30 @@ ytdata outliers "@handle" --min-ratio 2.0 --tab all --json
 
 > **Note:** The examples below use `python skills/youtube/scripts/ytdata.py` for repo-root execution. After `pip install -e .`, prefer the `ytdata` command — it works from any directory.
 
-> **Unsure which skill to use?** Read `skills/yt-guide/SKILL.md` — it's a decision tree that maps user intent to the right skill and explains all skills, when to use each, and how to chain them.
-
 ## When to use
 
 Any "audit my channel" / "why isn't this growing" / "full channel review" / "analyze competitor" request.
+
+## Phase 0 — CONSULT yt-guide FIRST (mandatory)
+
+Before running anything, **read `skills/yt-guide/SKILL.md`** and use its decision tree to select this chain. Do not "vibe-audit" — the guide maps intent → skills. If the user only asked a narrow question, use the narrow skill instead of the whole pipeline.
+
+> **If you reach this skill without having loaded yt-guide, stop and load it now.**
+
+---
+
+## Choose the audit mode FIRST
+
+| Mode | Behavior | When to use |
+|------|----------|-------------|
+| **Strict** (default) | A FAILED required phase (1–6) **stops the audit**. Report `OVERALL: FAILED`, the phase that failed, and stop. Do not run later phases. | "Full audit", "diagnose my channel", user expects completeness |
+| **Partial** (opt-in) | Independent phases continue after a failure. Final result is labeled **`OVERALL: PARTIAL`** with every failure listed. | User wants "as much as possible", time-boxed, or some phases genuinely cannot run (e.g. no CSV) |
+
+- **Ask the user once** which mode they want if unclear. Default = **strict**.
+- **Partial mode never silently degrades** — the final answer must begin with "PARTIAL AUDIT" and list what was not measured.
+- Never call a partial audit "complete" or a strict audit that stopped "done".
+
+---
 
 ## The Pipeline (run in order, each feeds the next)
 
@@ -50,35 +73,52 @@ python skills\youtube\scripts\ytdata.py profile "@handle"
 ```bash
 python skills/youtube/scripts/ytdata.py sections "@handle"
 python skills/youtube/scripts/ytdata.py channel "@handle" --limit 20 --with-duration
-python skills/youtube/scripts\ytdata.py latest "@handle" --limit 10 --with-duration
-python skills/youtube/scripts\ytdata.py home "@handle"
-python skills/youtube/scripts\ytdata.py profile "@handle"
+python skills/youtube/scripts/ytdata.py latest "@handle" --limit 10 --with-duration
+python skills/youtube/scripts/ytdata.py home "@handle"
+python skills/youtube/scripts/ytdata.py profile "@handle"
 ```
 
 ### Phase 2: Content Extraction (transcript skill)
 
 **Windows PowerShell:**
 ```powershell
-python skills\transcript\scripts\gettranscript.py "<video_id>" --format json --all-langs
+python skills\transcript\scripts\gettranscript.py "<video_id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 **Linux/macOS:**
 ```bash
-python skills/transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs
+python skills/transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 ### Phase 3: Hook Analysis (yt-script skill)
+
+**This phase means invoking the yt-script skill — load it and run its script:**
 
 ```bash
 # Score hooks from transcripts:
 python skills/yt-script/scripts/hookscore.py "<transcript_file.json>" --json
 ```
 
+> Do **not** call `ytdata` here and claim "hooks analyzed" — hookscore is a different tool in a different skill.
+
 ### Phase 4: Title/Thumbnail Analysis (yt-package skill)
+
+**Load the yt-package skill and run its script — do not approximate it with ytdata. Keep title and thumbnail evaluation separate.**
 
 ```bash
 # Score titles from channel data (using --file with JSON):
 python skills/yt-package/scripts/title.py --file titles.json --json
+
+# Vision gate (RUN this before ANY image claim; text-only scoring proves nothing):
+python skills/yt-package/scripts/vision_gate.py "<video_id>" --destination "<artifact-destination>" \
+    --model "<exact-model>" --provider "<provider>" --mechanism "<harness mechanism>" --json
+# Step 1 (no --observation): generates vision-probe.png + sidecar truth.
+# Step 2: ACTUALLY READ vision-probe.png on that model via the mechanism.
+# Step 3 (re-run): add --observation '<destination>/observation.json' containing
+#   {"model": ..., "provider": ..., "mechanism": ..., "observed": "<exact probe string>"}
+# Exit 0 = verified (observed == known probe + images downloaded).
+# Exit 1 = NOT VERIFIED -> keep thumbnail_evaluated:false / NOT EVALUATED. No shortcuts.
+# A bare evidence file never verifies — only a matching observed probe does.
 ```
 
 Example `titles.json`:
@@ -94,7 +134,19 @@ Example `titles.json`:
 }
 ```
 
-### Phase 5: SEO / Keywords (youtube skill)
+> **Thumbnail honesty rule:** The `thumb` field is **user-supplied TEXT**. `title.py` scores text, never images. Text alone cannot justify `thumbnail_evaluated: true`. If no image was actually inspected, say **"Thumbnail NOT EVALUATED"**.
+>
+> **Vision gate (required before any image claim):**
+> 1. Inspect the configured agent model/provider. Do not infer vision from the model name or its provider.
+> 2. Verify image input through the harness image/file mechanism with a known test image on the same model. Record the model/provider and mechanism (`audio?` no; image attachment, image file tool, or API input) in the manifest.
+> 3. Download each actual thumbnail image into the selected artifact destination with a command whose output path is inside it (for example, download from `ytdata info` metadata or yt-dlp thumbnail extraction). Never analyze an image URL, filename or title alone.
+> 4. Only after that capability test passes, pass the downloaded image file(s) to the vision-capable model and evaluate visual hierarchy, contrast, readability, subject placement, text visibility and relevance to the video promise.
+> 5. Separate **MEASURED visual observations** from **subjective recommendations**. If the image is unavailable or the vision capability test fails, report `thumbnail_evaluated: false`, `thumbnail_basis: "vision_not_verified"`, and use `NOT EVALUATED` in the user-facing report.
+> 6. Do not claim CTR prediction or guaranteed performance from any visual observation. Where image evidence is insufficient to compare the thumbnail promise with actual content, say that and do not fill the gap.
+
+> **Heuristic disclaimer:** title.py scores are **heuristic quality signals**, not predictions of CTR or ranking. Never present them as "this will get X% CTR" or "YouTube will rank this #N".
+
+### Phase 5: SEO / Keywords (youtube data skill — NOT the yt-seo skill)
 
 ```bash
 python skills/youtube/scripts/ytdata.py keywords "niche" --patterns --json
@@ -104,31 +156,121 @@ python skills/youtube/scripts/ytdata.py trends "seed idea" --days 30 --verbose -
 python skills/youtube/scripts/ytdata.py gap "your seed" --competitor @theirhandle --json
 ```
 
-### Phase 6: Outlier / Competitor Analysis (youtube skill)
+**Keyword opportunity vs competition — do not confuse them:**
+- `keywords` outputs **opportunity_score** (higher = MORE opportunity — a seed worth targeting). It is labeled `opportunity_score` / `score_meaning: "opportunity"`.
+- `compete` outputs **competition_score** (higher = HARDER to rank — a head-term to avoid). It is labeled `competition_score` / `score_meaning: "competition_difficulty"`.
+- Never report a competition_score as "opportunity" or vice-versa. State which is which in the final report.
+
+> **Do not claim the yt-seo skill ran here.** These are `ytdata` (youtube data skill) commands. The `yt-seo` creator skill (description/tags writer) is a *different* skill — invoke it only if the user asks to write/optimize descriptions & tags, and mark it as invoked then.
+
+### Phase 6: Outlier / Competitor Analysis (youtube data skill — NOT the yt-viral skill)
 
 ```bash
 python skills/youtube/scripts/ytdata.py outliers "@handle" --min-ratio 2.0 --tab all --json
 ```
 
+> **Do not claim the yt-viral skill ran here.** `ytdata outliers` is the youtube data skill. The `yt-viral` creator skill (formula naming / swipe file) is a *different* skill — invoke it only if you actually open its SKILL.md and run its scripts.
+
 ### Phase 7: Retention Analysis (yt-retention skill) — OPTIONAL but HIGH-LEVERAGE
 
 ```bash
-# If user provides CSV export:
-python skills/yt-retention/scripts/retention.py retention.csv --json
+# Inventory EVERY CSV in the Studio export (never All.csv alone):
+python skills/yt-retention/scripts/retention.py "/path/to/Studio-export/" --dir --json
+
+# Then analyze the audience-retention curve. --duration is REQUIRED:
+# use the video's actual duration (ytdata info duration_seconds / transcript
+# metadata duration_seconds). WITHOUT --duration the axis is PERCENT-only —
+# never read the numbers as seconds.
+python skills/yt-retention/scripts/retention.py "/path/to/Studio-export/All.csv" --json --duration <seconds> [--transcript transcript.json]
 ```
 
-**Agent behavior**: If no CSV provided, **ask the user to export it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip."*
+The Studio export is a **ZIP of many CSVs** — All.csv, Detailed activity.csv, Subscribers and non-subscribers.csv, New and returning viewers.csv, Organic and paid traffic.csv, Organic.csv, ad-traffic CSVs, and New, casual and regular viewers.csv. Inspect them all.
+
+**Do NOT infer audience proportions, traffic shares or demographics** — the files are segmented retention curves, not share metrics. Absolute retention >100% = loops/rewatches, not ">100% of viewers". Label every claim `MEASURED`/`INFERRED`/`HYPOTHESIS`.
+
+**Agent behavior**: If no CSV is provided, **ask the user to export it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention export from YouTube Studio (Analytics → Engagement → Audience Retention → Download). It's a ZIP of several CSVs — upload it all if possible. If not, I'll skip."*
+
+---
+
+## Artifact destination (mandatory — inherited from yt-guide)
+
+**Ask the user for the destination directory before Phase 1 if one was not established this session.** Every file this workflow writes — `manifest.json`, transcripts, CSVs, scorecards, logs, intermediates — goes inside it. Absolute paths only. No Temp/Desktop/Downloads/cwd defaults, no overwrite without permission, and verify + report every artifact path at the end.
+
+If the destination is inaccessible, **stop and ask** — do not fall back silently.
+
+## Execution manifest (required)
+
+For every audit, produce a manifest — a machine-readable JSON record of each phase. Save it as `manifest.json` **inside the user-selected artifact destination** (e.g. `D:/YouTube/Audits/November-2026/manifest.json`) and use it to write the final answer.
+
+Example manifest:
+
+```json
+{
+  "mode": "strict",
+  "channel": "@Moments_Unscriptedorignal",
+  "artifact_destination": "D:/YouTube/Audits/November-2026",
+  "artifact_policy": "user_selected",
+  "artifacts_verified": true,
+  "phases": {
+    "phase1": {"skill": "youtube", "command": "ytdata sections ...", "exit_code": 0, "status": "success", "artifact": "D:/YouTube/Audits/November-2026/sections.json"},
+    "phase2": {"skill": "transcript", "command": "gettranscript.py 9NDb3RH9N7M --format json", "exit_code": 429, "status": "failed"}
+  },
+  "claims": [
+    {"text": "131 subs, 18 uploads", "evidence": "MEASURED"}
+  ]
+}
+```
+
+Then (required at the end, not optional) finalize it INTO the file:
+`--write` rewrites manifest.json with the FINAL artifacts_verified and
+overall_status so the saved file agrees with the validator output:
+
+```bash
+python skills/yt-workflow/scripts/audit_manifest.py --manifest D:/YouTube/Audits/November-2026/manifest.json --mode strict --destination D:/YouTube/Audits/November-2026 --write
+```
+
+Then re-read the saved manifest and confirm `artifacts_verified` and
+`overall_status` match the validator's output. A saved `artifacts_verified: false`
+next to a validator `verified: true` is a divergence bug — do not ship it.
+
+**Manifest rules:**
+- Record **every** phase you attempt, with the actual command, exit code, artifact path, and status: `success` | `failed` | `blocked` | `skipped` | `not_run`.
+- A phase with non-zero exit code is **never** `success`.
+- A phase you never ran is `not_run` — never mark it success.
+- `thumbnail_evaluated: true` is allowed **only** with `thumbnail_basis: "image_artifact"`. Text alone can never justify it.
+- Title/thumbnail/keyword scores carry a heuristic note — present them as heuristics, not predictions.
+
+---
+
+## Evidence & confidence (required in every final answer)
+
+Every strategic claim must carry one of these labels:
+
+| Label | Meaning | Example |
+|-------|---------|---------|
+| **MEASURED** | From tool output this session | "8,400 views, 64x subs (ytdata outliers)" |
+| **INFERRED** | Logical from measured data, but not directly measured | "Topic demand is real (measured views); competition is too high (measured compete)" |
+| **HYPOTHESIS** | Needs validation; don't act as fact | "A question-format title might lift CTR — untested for this channel" |
+
+Never present a **HYPOTHESIS** as **MEASURED**. Never invent numbers, views, scores, or counts that weren't in the tool output. If 18 titles scored REWORK, say 18 REWORK — not "all" (two were REVISE in this channel's audit; count only what the tool actually returned).
 
 ---
 
 ## Pipeline Rules (Agent Must Follow)
 
-1. **Never skip required phases** — Phases 1–6 are required; each produces input for the next. Phase 7 (retention) is optional.
-2. **Pass JSON between phases** — use `--json` flags, parse output.
-3. **Fail fast on required phases** — if a required phase (1–6) fails, report what's missing and stop.
-4. **Cache intermediates** — save JSON to temp files, pass paths forward.
-5. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the output and continue. Don't halt the pipeline.
-6. **Clean up downloaded artifacts** — yt-dlp may download thumbnail files (.webp, .jpg) and temp files. After each phase, delete any downloaded media files to avoid filling user disk space. Use `--no-thumbnails` flag when possible, or clean up `*.webp`, `*.jpg`, `*.mp4` files in the working directory after each command.
+1. **Phase 0 first** — consult yt-guide before selecting the chain.
+2. **Ask for audit mode** if the user didn't specify: strict (default) or partial.
+3. **Artifact destination first** — ask the user for the destination directory before anything writes a file (see "Artifact destination" above). Ask once; reuse it for the whole run.
+4. **Subagents only if the harness exposes them** — inspect the actual tool set; delegate only when a real delegation/subagent tool exists. Otherwise proceed sequentially and never claim subagents ran. Be conservative with parallel YouTube requests (HTTP 429 throttle).
+5. **Strict mode** — a FAILED required phase (1–6) stops the audit immediately. Report which phase failed and why. Do **not** continue to Phase N+1.
+6. **Partial mode** — continue independent phases; every failure stays listed; final answer labeled `PARTIAL AUDIT`.
+7. **Pass JSON between phases** — use `--json` flags, parse output.
+8. **Invoke the actual skill** — run the skill's own scripts (hookscore for yt-script, title.py for yt-package). Using `ytdata` means the **youtube data skill** ran, nothing else.
+9. **Record the manifest** — fill `manifest.json` (inside the artifact destination) as you go; report it at the end.
+10. **Write intermediates into the artifact destination** — saved JSON passes paths forward, nothing lands in Temp/cwd.
+11. **Handle missing data gracefully** — if optional phase data is missing (e.g., no retention CSV, no transcript for a video), note it in the output and continue. Don't halt the pipeline.
+12. **Never fabricate** — no invented view counts, no invented thumbnail text, no "I saw the thumbnail" claims from text.
+13. **Clean up downloaded artifacts inside the destination** — yt-dlp may download thumbnail files (.webp, .jpg) and temp files. After each phase, delete any downloaded media files to avoid filling the artifact destination with junk. Use `--no-thumbnails` where supported, or clean up `*.webp`, `*.jpg`, `*.mp4` in the destination after each command — then re-verify the destination.
 
 ---
 
@@ -146,6 +288,15 @@ python skills/yt-retention/scripts/retention.py retention.csv --json
 | PowerShell `Out-File -Encoding utf8` writes BOM | `... | Out-File -Encoding utf8 file.json` → then `json.load()` crashes with "Unexpected UTF-8 BOM" | Use Python to write files: `python -c "open(r'file.json','w',encoding='utf-8').write(out)"`, or read with BOM-tolerant code (scripts here already use `utf-8-sig`) |
 | Windows cp1252 default encoding | `open(path)` without encoding → `UnicodeDecodeError` on emoji/smart quotes | Use `open(path, encoding='utf-8')` (or `utf-8-sig` for Windows-authored files) |
 | **Truncating a file before reading it** | `open(p,'w').write(open(p,encoding='utf-8-sig').read())` — deletes the file! | Read first, then write: `data = open(p, encoding='utf-8-sig').read(); open(p,'w',encoding='utf-8').write(data)` |
+| **ytdata ≠ creator skills** | "Phase 3/4/5 done" because you ran ytdata commands | yt-script/yt-package/yt-seo/yt-viral only ran if you opened their SKILL.md and ran their scripts |
+| **Thumbnail text = thumbnail image** | "I analyzed your thumbnail; contrast is weak" | Text-only scoring says nothing about the actual image. Mark `thumbnail_evaluated: false` |
+| **Strict audit that "completed"** | Transcript failed (429) yet report says "full audit done" | Strict stops at the failure. Partial labels everything `PARTIAL AUDIT` |
+| **Temp-directory fallback** | Saving `manifest.json` or transcripts to Temp/cwd/Downloads after the user picked a destination (or without asking) | Stop and ask for the destination first; everything lives inside it; absolute paths; verify + report artifacts |
+| **Overwriting without permission** | Writing over an existing `manifest.json` / artifact | Ask first — never overwrite without explicit permission |
+| **Failure = success** | Non-zero exit code, phase marked "done" | Exit code governs status; a failed phase is never success |
+| **Heuristic = prediction** | "This title will 3x your CTR" | Heuristic score is a signal, not a forecast. Say "heuristic score: 47/100" |
+| **Invented counts** | "all 18 titles were REWORK" when the output had REVISE+REWORK | Quote the exact counts from tool output |
+| **Opportunity vs competition confusion** | "space facts for kids, score 100 — great opportunity" | 100 = easy to get suggested, but competition is HARD (verified channels, 6.4M median) — opportunity ≠ competition |
 
 ---
 
@@ -156,9 +307,9 @@ python skills/yt-retention/scripts/retention.py retention.csv --json
 | 1 | youtube | @handle | Channel data (sections, videos, home, profile) |
 | 2 | transcript | Top 3 video IDs | Full transcripts (JSON + timestamps) |
 | 3 | yt-script | Transcripts | Hook metrics (words/sec, questions, numbers, second-person, etc.) per video |
-| 4 | yt-package | Titles + hook scores | Title/thumbnail scores + briefs |
-| 5 | yt-seo | Niche + target video | Keywords, competition scores, scorecards |
-| 6 | yt-viral | Channel + niche | Outliers (views/subs ratio), competitor gaps |
+| 4 | yt-package | Titles + hook scores | Title text scores (heuristic); thumbnail image status or NOT EVALUATED |
+| 5 | youtube (data) | Niche + target video | Keywords (opportunity), competition scores, scorecards |
+| 6 | youtube (data) | Channel + niche | Outliers (views/subs ratio), competitor gaps |
 | 7 | yt-retention | Studio CSV (optional) | Drop-off points, retention curves |
 
 ---
@@ -166,39 +317,23 @@ python skills/yt-retention/scripts/retention.py retention.csv --json
 ## Example Agent Prompt
 
 ```text
-Run a full channel analysis on @Moments_Unscriptedorignal:
+Run a full channel analysis on @Moments_Unscriptedorignal. Mode: strict.
 
-1. Run youtube skill: sections, channel, latest, home, profile
-   python skills/youtube/scripts/ytdata.py sections "@handle"
-   python skills/youtube/scripts/ytdata.py channel "@handle" --limit 20 --with-duration
-   python skills/youtube/scripts/ytdata.py latest "@handle" --limit 10 --with-duration
-   python skills/youtube/scripts/ytdata.py home "@handle"
-   python skills/youtube/scripts/ytdata.py profile "@handle"
+Before any file is written: ask the user for the artifact destination
+directory (e.g. D:/YouTube/Audits/November-2026) and reuse it for the whole run.
+Phase 0: load yt-guide, confirm the chain.
+Phase 1: sections, channel, latest, home, profile (--json)
+Phase 2: transcripts for top 3 videos (--format json --all-langs)
+Phase 3: yt-script hookscore on each transcript
+Phase 4: yt-package title scoring on last 10 titles
+Phase 5: youtube keywords (opportunity) + compete (competition) + scorecard
+Phase 6: youtube outliers
+Phase 7 (optional): if user provides Studio CSV, run retention.py
 
-2. Get transcripts for top 3 videos by views (--all-langs)
-   python skills/transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs
-
-3. Run yt-script hookscore on each transcript
-   python skills/yt-script/scripts/hookscore.py "<transcript_file.json>" --json
-
-4. Run yt-package title scoring on last 10 titles
-   python skills/yt-package/scripts/title.py --file titles.json --json
-
-5. Run youtube skill keywords for "space facts" niche
-   python skills/youtube/scripts/ytdata.py keywords "space facts" --patterns --json
-
-6. Run youtube skill compete for top keyword
-   python skills/youtube/scripts/ytdata.py compete "top keyword" --top 10 --json
-
-7. Run youtube skill outliers on channel
-   python skills/youtube/scripts/ytdata.py outliers "@handle" --min-ratio 2.0 --tab all --json
-
-8. (Optional) Run yt-retention if user provides Studio CSV
-   python skills/yt-retention/scripts/retention.py retention.csv --json --duration <seconds>
-
-9. Synthesize all into ONE fix, 3 working things, what NOT to do
-
-Output: single biggest fix, 3 working things, what NOT to do.
+Maintain manifest.json inside the destination as you go. Label every claim MEASURED/INFERRED/HYPOTHESIS.
+If any required phase fails: strict → stop and report FAILED at that phase.
+If user asked for partial: continue, label final answer PARTIAL AUDIT.
+Final answer = ONE biggest fix, 3 working things, what NOT to do.
 ```
 
 ---
@@ -210,9 +345,9 @@ Output: single biggest fix, 3 working things, what NOT to do.
 | 1 | youtube | Channel profile, videos list, sections, home tab data |
 | 2 | transcript | Transcript JSON per video |
 | 3 | yt-script | Hook metrics per video (raw stats, not a 0-100 score) |
-| 4 | yt-package | Title score 0-100 per video |
-| 5 | yt-seo | Keywords, competition score, SEO scorecard |
-| 6 | yt-viral | Outlier videos (views/subs ratio), velocity |
+| 4 | yt-package | Title text scores (heuristic); thumbnail image NOT EVALUATED unless vision gate passed |
+| 5 | youtube (data) | Keywords (opportunity_score), competition (competition_score), scorecard |
+| 6 | youtube (data) | Outlier videos (views/subs ratio), velocity |
 | 7 | yt-retention | Retention curves, drop-off points (optional) |
 
-The agent synthesizes all phases into: **one biggest fix + 3 things working + what NOT to do.**
+The agent synthesizes all phases into: **one biggest fix + 3 things working + what NOT to do** — with every claim labeled MEASURED/INFERRED/HYPOTHESIS.

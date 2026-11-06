@@ -8,6 +8,7 @@ NO formulas, NO biases, NO heuristics - pure mathematical analysis.
 Outputs raw statistical features that ANY channel type can use.
 """
 import json
+import os
 import re
 import sys
 import argparse
@@ -225,27 +226,122 @@ def extract_first_n_seconds(transcript: List[Dict], n_seconds: int = 15) -> str:
     return " ".join(segments)
 
 
+def resolve_gettranscript():
+    """Find gettranscript.py relative to THIS file — cwd-independent.
+
+    Repo layout: skills/yt-script/scripts/hookscore.py
+    -> skills/transcript/scripts/gettranscript.py (skills root = parents[2]).
+    Installed layout (opencode skills dir) mirrors it. Walk up as fallback
+    so a repo checkout at any depth still resolves.
+    """
+    here = Path(__file__).resolve()
+    # here: .../yt-script/scripts/hookscore.py ; skills root = parents[2]
+    skills_root = here.parents[2]
+    cand = skills_root / "transcript" / "scripts" / "gettranscript.py"
+    if cand.exists():
+        return cand
+    for parent in here.parents:
+        cand = parent / "skills" / "transcript" / "scripts" / "gettranscript.py"
+        if cand.exists():
+            return cand
+        cand = parent / "transcript" / "scripts" / "gettranscript.py"
+        if cand.exists():
+            return cand
+    return cand  # last resort: expected repo path (for a clear error message)
+
+
+def run_fetcher(args, timeout=180):
+    """Run gettranscript.py and decode its output ROBUSTLY.
+
+    Windows consoles default to cp1252; yt-dlp may emit non-UTF-8 bytes
+    (observed 0x8f). Without explicit encoding/errors the OS locale decoder
+    raises UnicodeDecodeError inside subprocess's reader thread and
+    result.stdout comes back None. Always decode UTF-8 with replacement.
+    """
+    import subprocess
+    return subprocess.run(
+        [sys.executable, str(resolve_gettranscript())] + list(args),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=timeout)
+
+
+def _read_text_tolerant(path):
+    """Read a text file tolerating UTF-8, UTF-8-BOM, UTF-16LE/BE (PowerShell `>`).
+
+    Returns the decoded string; never raises UnicodeDecodeError on a
+    well-formed text file. Raises ValueError only if no BOM/encoding matches
+    (caller converts to a clean exit).
+    """
+    raw = Path(path).read_bytes()
+    if raw.startswith(b"\xff\xfe"):
+        return raw[2:].decode("utf-16-le", errors="replace")
+    if raw.startswith(b"\xfe\xff"):
+        return raw[2:].decode("utf-16-be", errors="replace")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw[3:].decode("utf-8", errors="replace")
+    # utf-16le without BOM is common from PS `>`; detect NUL pattern.
+    if len(raw) >= 2 and raw[1] == 0 and raw[0] != 0:
+        return raw.decode("utf-16-le", errors="replace")
+    return raw.decode("utf-8", errors="replace")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Pure mathematical hook analysis - first N seconds")
-    parser.add_argument("input", help="Transcript JSON file or video ID")
+    parser.add_argument("input", nargs="?", help="Transcript JSON file or video ID")
+    parser.add_argument("--hook", default=None,
+                        help="Single hook line to score (compat with installed CLI: `--hook \"line\"`)")
+    parser.add_argument("--file", default=None,
+                        help="Line-delimited text file of hook candidates (compat: `hookscore.py hooks.txt`)")
     parser.add_argument("--seconds", type=int, default=15, help="Seconds to analyze (default 15)")
     parser.add_argument("--json", action="store_true", help="Output JSON")
     args = parser.parse_args()
 
+    # --- compat modes: --hook / --file (score a literal probe line) ---
+    probe_lines = []
+    if args.hook:
+        probe_lines = [args.hook]
+    elif args.file:
+        text = _read_text_tolerant(args.file)
+        probe_lines = [ln.strip() for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n") if ln.strip()]
+    if args.input and args.input.endswith(".txt") and not probe_lines:
+        # Plain-text transcript line file passed positionally.
+        text = _read_text_tolerant(args.input)
+        probe_lines = [ln.strip() for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n") if ln.strip()]
+    if probe_lines:
+        out = []
+        for line in probe_lines:
+            stats = analyze_text_statistics(line, args.seconds)
+            stats["hook"] = line
+            stats["seconds_analyzed"] = args.seconds
+            out.append(stats)
+        if args.json:
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+        else:
+            for stats in out:
+                print(f"\nHOOK: {stats['hook']}")
+                print(f"  words: {stats['basic_counts']['words']}  wps: {stats['rates']['words_per_second']}")
+            print(f"\nScored {len(out)} hook(s) (compat mode: --hook / --file).")
+        return
+
+    if not args.input:
+        parser.error("input file/ID (or --hook / --file) is required")
+
     # Load transcript
-    if args.input.endswith(".json"):
-        with open(args.input, 'r', encoding='utf-8-sig') as f:
-            data = json.load(f)
+    if args.input.endswith((".json", ".json3", ".txt")):
+        text = _read_text_tolerant(args.input)
+        data = json.loads(text)
         transcript = data.get("transcript", data.get("transcripts", []))
         if isinstance(transcript, dict) and "transcript" in transcript:
             transcript = transcript["transcript"]
     else:
-        # Fetch transcript via gettranscript.py
-        import subprocess
-        result = subprocess.run([
-            sys.executable, "skills/transcript/scripts/gettranscript.py",
-            args.input, "--format", "json"
-        ], capture_output=True, text=True, cwd=".")
+        # Fetch transcript via gettranscript.py (cwd-independent resolution)
+        gt = resolve_gettranscript()
+        if not gt.exists():
+            print(f"ERROR: gettranscript.py not found (resolved: {gt}). "
+                  f"Expected it under the skills/ tree next to this script; "
+                  f"cwd={os.getcwd()}", file=sys.stderr)
+            sys.exit(1)
+        result = run_fetcher([args.input, "--format", "json"])
         if result.returncode != 0:
             print(f"ERROR: {result.stderr}", file=sys.stderr)
             sys.exit(1)

@@ -5,9 +5,11 @@ description: >-
   checking truncation, duplication and vagueness before publish. Use for
   "title ideas", "what should I call this", "thumbnail text", "my CTR is
   bad", packaging, or any request to rename or repackage an existing video.
----**Pipeline Position:** Phase 4 — Title/Thumbnail Audit
+---
+
+**Pipeline Position:** Phase 4 — Title/Thumbnail Audit
 **Inputs:** Channel titles from youtube skill; hook scores from yt-script
-**Outputs:** Title scores, thumbnail briefs → feeds yt-seo, yt-workflow (agent synthesizes)
+**Outputs:** Title scores (heuristic), thumbnail briefs → feeds yt-seo, yt-workflow (agent synthesizes)
 **Triggers:** title ideas, thumbnail text, packaging, CTR is bad
 
 
@@ -38,6 +40,14 @@ python3 title.py titles.txt            # one per line, ranked
 2. Never invent a number, a result or a source. If a figure would strengthen it and you do not have
    one, ask for it or write the line without it.
 
+## Honesty rules (non-negotiable)
+
+- **Thumbnail text is not the thumbnail image.** `title.py` scores *text only*. You may never claim to have "checked the contrast", "seen the face", "evaluated the actual thumbnail", or to have derived anything from the pixels when only text was supplied. If no thumbnail image was provided, say **"thumbnail not evaluated — text only"** and score only the text.
+- **Scores are heuristics, not forecasts.** A 47/100 title score is a signal about the title text, not a prediction of CTR, ranking, impressions or views. Never write "this will get X% CTR" or "YouTube will rank this".
+- **Never present a heuristic as an outcome.** Say "heuristic score: 47/100 (title text only)" or "thumbnail not evaluated".
+- **Verdicts must match the tool.** SHIP/REVISE/REWORK comes from the tool, not from your gut. Quote the exact counts the tool returned (e.g., 9 REWORK out of 10 title entries — never "all 18" when that is not what the output said).
+- **No invented thumbnail copy.** If the user did not give you thumbnail text, do not invent it — ask, or score without one.
+
 ## Rules the tool enforces, and why
 
 - **60 characters** is where desktop search truncates, **40** is a mobile home feed. Both are
@@ -58,3 +68,7 @@ framing, the three words, and what the background has to do to hold contrast at 
 
 Nothing here publishes. This skill writes and you publish. Every output ends in a block the user
 copies, and the last line of every run is the question: **ship it, or change it?**
+
+
+---
+> **Artifact destination applies.** If this skill writes any file (manifest, transcript, CSV, report, log, temp output), the user-selected artifact destination governs it — see yt-guide "Artifact Destination Policy". Ask first if not established; absolute paths only; everything inside that directory; never Temp/Desktop/Downloads/cwd; never overwrite without permission; verify and report artifact paths.

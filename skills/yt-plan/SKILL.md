@@ -55,3 +55,7 @@ goes wrong.
 
 Nothing here publishes. This skill writes and you publish. Every output ends in a block the user
 copies, and the last line of every run is the question: **ship it, or change it?**
+
+
+---
+> **Artifact destination applies.** If this skill writes any file (manifest, transcript, CSV, report, log, temp output), the user-selected artifact destination governs it — see yt-guide "Artifact Destination Policy". Ask first if not established; absolute paths only; everything inside that directory; never Temp/Desktop/Downloads/cwd; never overwrite without permission; verify and report artifact paths.

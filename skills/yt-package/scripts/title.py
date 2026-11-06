@@ -252,7 +252,26 @@ def score_package(title: str, thumb_text: str = "", keyword: str = "") -> Dict:
     return {
         "combined_score": combined,
         "title": title_result,
-        "thumbnail": thumb_result,
+        "thumbnail": {
+            # Legacy flat fields preserved for consumers/callers (existing tests + dashboards).
+            "score": thumb_result["score"],
+            "checks": thumb_result.get("checks", []),
+            # New explicit split — text is user-supplied heuristic; image is NOT evaluated here.
+            "text_score": thumb_result,
+            "image_score": None,
+        },
+        # Title-text and thumbnail-image evaluation are separate concerns.
+        # `thumbnail_evaluated` means the ACTUAL image was assessed (for the
+        # audit manifest contract), not merely that user supplied text.
+        "thumbnail_evaluated": False,
+        "thumbnail_image_evaluated": False,
+        "thumbnail_text_evaluated": bool(thumb_text),
+        "thumbnail_basis": "user_supplied_text" if thumb_text else "none",
+        "thumbnail_status": "TEXT ONLY - image NOT EVALUATED" if thumb_text else "NOT EVALUATED",
+        "thumbnail_note": ("Thumbnail text was user-supplied. This is NOT a visual evaluation of "
+                           "the actual thumbnail image.") if thumb_text else
+                          "No thumbnail text was supplied — the image was NOT evaluated.",
+        "heuristic_note": "Scores are heuristic signals, not predictions of CTR or ranking.",
         "verdict": "SHIP" if combined >= 70 else "REVISE" if combined >= 50 else "REWORK"
     }
 
@@ -295,10 +314,11 @@ def main():
                 status = "✅" if c['passed'] else "❌"
                 print(f"  {status} [{c['weight']}] {c['message']}")
             if result['thumbnail']['score']:
-                print(f"\nThumbnail Analysis ({result['thumbnail']['score']}/100):")
+                print(f"\nThumbnail TEXT Analysis ({result['thumbnail']['score']}/100):")
                 for c in result['thumbnail']['checks']:
                     status = "✅" if c.get('passed', False) else "❌"
                     print(f"  {status} {c['check']}: {c.get('score', 0)}pts")
+                print("Image evaluation: NOT EVALUATED")
     else:
         parser.print_help()
 

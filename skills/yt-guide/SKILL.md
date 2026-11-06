@@ -8,6 +8,43 @@ description: >-
 
 Read this file when you're unsure which skill to run. It maps user intent → the right skill, explains what each skill does, and when to chain multiple skills together.
 
+---
+
+## Artifact Destination Policy (mandatory — global, all file-creating workflows)
+
+**This is the owning rule. Every skill that writes a file must follow it.**
+
+1. **Ask first.** Before any file-creating workflow, ask the user for the destination directory **if one has not already been established this session**. Do not default to Temp, Desktop, Downloads, the current working directory, or this skill's directory — ever.
+2. **Absolute paths.** Use absolute paths everywhere. Relative paths are not accepted.
+3. **Everything lives inside the selected destination**: manifests, transcripts, CSVs, reports, extracted data, charts, logs, intermediate files — all of it. Subdirectories inside the destination are fine.
+4. **No silent fallback.** If the destination is inaccessible, stop and ask — never fall back to Temp/cwd/sibling directories on your own.
+5. **Overwrite protection.** Never overwrite an existing file without explicit user permission. If the target path exists, ask first.
+6. **Verify.** After generating artifacts, verify they exist and remain inside the destination. Report the absolute paths of every artifact.
+7. **Persist.** Keep the destination for the whole workflow — do not re-ask before every step.
+8. Testing fixtures and internal development outputs may remain inside the repository's test workspace; this policy concerns **user-facing workflow artifacts**.
+
+In manifests this looks like:
+
+```json
+{
+  "artifact_destination": "D:/YouTube/Audits/November-2026",
+  "artifact_policy": "user_selected",
+  "artifacts_verified": true
+}
+```
+
+---
+
+## Subagents are optional — never assumed
+
+- **Inspect the tools actually exposed by this harness** before planning. Delegate only when a real delegation/subagent tool exists (e.g. task, subagent, Task-tool).
+- If unavailable, **proceed sequentially**. Do not stall, do not fake it.
+- **Never invent a delegation tool** and never claim subagents were used when they were not.
+- **Be conservative with parallel YouTube requests**, especially transcripts — YouTube will throttle hard (HTTP 429). Cap parallelism or serialize.
+- Subagents are never mandatory. The default is sequential.
+
+---
+
 ## How to choose (decision tree)
 
 ```

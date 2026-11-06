@@ -30,6 +30,7 @@ A helper script lives at `scripts/gettranscript.py` (relative to this SKILL.md).
 python scripts/gettranscript.py "<url-or-id>" --format json
 python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
 python scripts/gettranscript.py "<url-or-id>" --lang mr,en
+python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 ### Linux/macOS (bash/zsh):
@@ -37,6 +38,7 @@ python scripts/gettranscript.py "<url-or-id>" --lang mr,en
 python scripts/gettranscript.py "<url-or-id>" --format json
 python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
 python scripts/gettranscript.py "<url-or-id>" --lang mr,en
+python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 ### Input formats accepted:
@@ -85,6 +87,8 @@ python scripts/gettranscript.py "<url-or-id>" --lang mr,en
 - Auto-translated English is poor quality
 - You want to compare translations for accuracy
 
+`--all-langs` and other CLI flags are always parsed as options, never as video IDs. If an explicitly requested option cannot be satisfied, the script exits non-zero and reports it — it does **not** silently downgrade to a default-language transcript.
+
 ## Behavior & limits
 
 - Prefers manual captions, falls back to auto-generated.
@@ -101,3 +105,7 @@ This skill only pulls the spoken text. For **search, channel browsing, playlists
 - Long video? Summarize the key points first, then offer the full transcript on request.
 - Use `stamped` when the user asks "where does he say X" or wants timestamps.
 - If a very new video returns nothing, auto-captions may not be generated yet — tell the user.
+
+
+---
+> **Artifact destination applies.** If this skill writes any file (manifest, transcript, CSV, report, log, temp output), the user-selected artifact destination governs it — see yt-guide "Artifact Destination Policy". Ask first if not established; absolute paths only; everything inside that directory; never Temp/Desktop/Downloads/cwd; never overwrite without permission; verify and report artifact paths.
