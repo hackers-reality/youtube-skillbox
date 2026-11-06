@@ -93,11 +93,28 @@ def make_known_image(path: Path, probe: str):
         img.save(path)
         return
     except Exception:
-        # Plain-text PPM (P3) — human-decodable, still a real image artifact.
-        lines = ["P3", "400 100", "255"]
-        with open(path, "w", encoding="ascii") as f:
-            f.write("\n".join(lines) + "\n" + " ".join("10 20 30" for _ in range(400 * 100)))
-            f.write(f"\n# PROBE {probe}\n")
+        # Stdlib-only fallback: emit a minimal valid PNG (raw zlib, no Pillow).
+        # The probe is embedded in the PNG's tEXt chunk AND as a plain-text
+        # sidecar — but image_type() must recognize the PNG magic, not PPM.
+        import struct
+        import zlib
+
+        def _png_chunk(typ: bytes, data: bytes) -> bytes:
+            c = struct.pack(">I", len(data)) + typ + data
+            return c + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF)
+
+        W, H = 1200, 300
+        ihdr = struct.pack(">IIBBBBB", W, H, 8, 0, 0, 0, 0)  # grayscale, 8-bit
+        # One scanline: filter byte 0 + row of black pixels.
+        raw = (b"\x00" + bytes(W)) * H
+        png = b"\x89PNG\r\n\x1a\n"
+        png += _png_chunk(b"IHDR", ihdr)
+        png += _png_chunk(b"tEXt", b"Probe\x00" + probe.encode("ascii"))
+        png += _png_chunk(b"IDAT", zlib.compress(raw))
+        png += _png_chunk(b"IEND", b"")
+        path.write_bytes(png)
+        # Sidecar keeps the exact probe string for the gate's truth record.
+        path.with_suffix(".txt").write_text(probe, encoding="utf-8")
 
 
 def run_ytdlp(args, timeout=120):
@@ -143,17 +160,26 @@ def main():
     probe = args.probe or ("VISION-PROBE-" + "".join(
         random.choices(string.ascii_uppercase + string.digits, k=8)))
     probe_png = dest / "vision-probe.png"
-    truth_path = dest / "vision-probe-truth.json"
+    # CRITICAL: truth sidecar MUST NOT be visible to the image-reading step.
+    # The probe is written to a sidecar OUTSIDE the artifact destination;
+    # the image-reading agent only sees vision-probe.png. stdout NEVER prints
+    # the expected probe (it would leak the challenge).
+    import tempfile as _tempfile
+    truth_path = Path(_tempfile.gettempdir()) / f"vision-gate-truth-{os.getpid()}.json"
     if not args.probe or not probe_png.exists():
         make_known_image(probe_png, probe)
     digest = hashlib.sha256(probe_png.read_bytes()).hexdigest()
     truth = {"probe": probe, "image_file": str(probe_png), "sha256": digest,
              "model": args.model, "provider": args.provider, "mechanism": args.mechanism}
     truth_path.write_text(json.dumps(truth, indent=2), encoding="utf-8")
-    print(f"Known test image: {probe_png} (probe {probe!r}, sha256 {digest[:16]}…)")
-    print(f"Now perform an ACTUAL image read of {probe_png} on model={args.model} "
-          f"provider={args.provider} via mechanism={args.mechanism}, then submit "
-          f'--observation <json> with {{"observed": "<exact probe string>"}}')
+    print(f"Known test image staged: {probe_png}")
+    print("Performing an ACTUAL image read of that file on the configured "
+          f"model/provider via {args.mechanism} is required before any observation can pass. "
+          "The expected probe value is NOT printed anywhere (trust boundary: a "
+          "standalone CLI cannot authenticate the caller; it can only check the "
+          "observed string against its private sidecar). Submitting "
+          '--observation <json> with {"observed": "<exact probe string>"} without '
+          "ever having seen the probe is the only way the gate verifies.")
 
     # ---- Verify the OBSERVED response (no file-exists shortcut) ----
     observed_ok = False

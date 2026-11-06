@@ -61,8 +61,10 @@ def normalize_id(url_or_id):
 
 
 def _is_429(proc):
+    """Precise 429 detection (not a broad 'rate' substring)."""
     err = (getattr(proc, "stderr", "") or "").lower()
-    return ("429" in err or "too many requests" in err or "rate" in err)
+    import re as _re
+    return bool(_re.search(r"\b429\b", err) or "too many requests" in err or "rate-limited" in err or "rate limited" in err)
 
 
 def fetch_subtitle_files(vid, langs, all_langs=False, work_dir=None,
@@ -130,6 +132,12 @@ def fetch_subtitle_files(vid, langs, all_langs=False, work_dir=None,
         die(f"ALL-LANGS transcript fetch failed for {vid}: HTTP 429 Too Many Requests "
             f"after {retries} retries (explicit failure, no silent downgrade). "
             f"Last error: {(proc.stderr or '').strip().splitlines()[-1] if proc.stderr else 'no stderr'}")
+    # Non-zero yt-dlp exits must NEVER silently produce a successful result —
+    # even partial file sets are failures (no incomplete --all-langs).
+    if proc is not None and getattr(proc, "returncode", 0) not in (0, None):
+        err = (proc.stderr or "").strip().splitlines()
+        die(f"Transcript fetch failed for {vid} (yt-dlp exit {proc.returncode}): "
+            f"{err[-1] if err else 'no stderr'} -- refusing to return a partial result.")
     files = []
     for name in os.listdir(tmpdir):
         if not name.endswith(".json3"):

@@ -132,9 +132,13 @@ class AuditManifest:
     def record(self, phase, skill, command, exit_code=None, status=None,
                artifact=None, notes="", artifact_type=None, producing_phase=None):
         """Record a phase. Status defaults to exit-code-derived; explicit
-        status wins, but a non-zero exit code can never report success."""
+        status wins, but a non-zero exit code can never report success, and a
+        missing exit_code can never report success either."""
         if status is None:
             status = _status_from_exit_code(exit_code)
+        elif status == "success" and exit_code is None:
+            raise ValueError(
+                f"Phase {phase}: status='success' with missing exit_code is not allowed")
         elif status == "success" and exit_code not in (None, 0):
             raise ValueError(
                 f"Phase {phase}: status='success' with non-zero exit code {exit_code} is not allowed")
@@ -275,9 +279,10 @@ class AuditManifest:
                                image_artifact_path=None):
         """Thumbnail analysis must never claim visual evaluation on text alone.
 
-        - basis='image_artifact' AND thumbnail_evaluated=True requires that an
-          image artifact (or the file itself) was registered/provided inside the
-          destination. It must exist on disk.
+        - basis='image_artifact' AND thumbnail_evaluated=True requires a VALIDATED
+          vision-gate result (record_vision_gate status 'verified' with matching
+          probe/observed) AND an image artifact inside the destination whose
+          actual bytes are a recognized image (checked via magic + readability).
         - basis='user_supplied_text' AND thumbnail_evaluated=False is fine.
         - Otherwise the claim is rejected.
         """
@@ -288,6 +293,11 @@ class AuditManifest:
                 raise ValueError(
                     "thumbnail_evaluated=True is only allowed with basis='image_artifact'; "
                     "text alone cannot prove visual evaluation")
+            vg = getattr(self, "vision_gate", None)
+            if not vg or vg.get("status") != "verified":
+                raise ValueError(
+                    "thumbnail_evaluated=True requires a verified vision-gate result "
+                    "(record_vision_gate verified) — an image file alone is not proof")
             if image_artifact_path is None:
                 image_artifact_path = self.phases[phase].get("artifact")
             if not image_artifact_path:
@@ -307,6 +317,18 @@ class AuditManifest:
             if ext not in self._IMAGE_EXT:
                 raise ValueError(
                     f"thumbnail artifact must be an image file (jpg/png/webp), got {ext!r}: {resolved_image}")
+            # Validate actual image bytes (magic), not just extension.
+            try:
+                with open(resolved_image, "rb") as fh:
+                    magic = fh.read(8)
+            except OSError as e:
+                raise ValueError(f"thumbnail artifact for analysis is unreadable: {e}")
+            _MAGICS = {b"\xff\xd8\xff": "jpg", b"\x89PNG\r\n\x1a\n": "png",
+                       b"RIFF": "webp", b"GIF8": "gif", b"BM": "bmp"}
+            if not any(magic.startswith(m) for m in _MAGICS):
+                raise ValueError(
+                    f"thumbnail artifact content is not a recognized image "
+                    f"(magic mismatch for extension {ext!r}: {resolved_image})")
         # register the image artifact so the inventory is complete
         if image_artifact_path is not None:
             try:
@@ -340,7 +362,10 @@ class AuditManifest:
             if not evidence_path or not os.path.exists(evidence_path):
                 raise ValueError("verified vision gate requires an existing evidence file "
                                  "(known-image test result) on disk")
-            if probe is not None and observed is not None and observed != probe:
+            # Probe/observation evidence is mandatory for verified — no exceptions.
+            if probe is None or observed is None:
+                raise ValueError("verified vision gate requires BOTH probe and observed evidence")
+            if observed != probe:
                 raise ValueError(f"verified vision gate requires observed == known probe; "
                                  f"got observed={observed!r} probe={probe!r}")
             if not files:
@@ -353,6 +378,17 @@ class AuditManifest:
                 ext = os.path.splitext(f)[1].lower()
                 if ext not in self._IMAGE_EXT:
                     raise ValueError(f"vision gate thumbnail must be an image file, got {ext!r}")
+                # Validate ACTUAL image content (magic bytes), not just extension.
+                try:
+                    with open(f, "rb") as fh:
+                        magic = fh.read(8)
+                except OSError as e:
+                    raise ValueError(f"vision gate thumbnail unreadable: {e}")
+                _MAGICS = {b"\xff\xd8\xff": "jpg", b"\x89PNG\r\n\x1a\n": "png",
+                           b"RIFF": "webp", b"GIF8": "gif", b"BM": "bmp"}
+                if not any(magic.startswith(m) for m in _MAGICS):
+                    raise ValueError(f"vision gate thumbnail content is not a recognized image "
+                                     f"(magic mismatch for extension {ext!r}: {f})")
         self.vision_gate = {
             "status": status,
             "model": model,
@@ -375,9 +411,9 @@ class AuditManifest:
             if not self._inside_destination(resolved):
                 raise ValueError(f"manifest escapes selected destination: {resolved}")
             self._register_artifact(resolved, "audit_manifest", "manifest")
-        if os.path.exists(resolved) and not overwrite:
-            # Re-check nothing changed structurewise — overwrite only when invited.
-            pass
+        if os.path.exists(resolved):
+            raise FileExistsError(
+                f"refusing to overwrite existing file without overwrite=True: {resolved}")
         if not os.path.exists(resolved):
             # Placeholder so verify_artifacts() sees the manifest itself as claimed.
             with open(resolved, "w", encoding="utf-8") as f:
@@ -403,10 +439,14 @@ class AuditManifest:
                 failed.append((ph, "not_run"))
             elif rec["status"] != "success":
                 failed.append((ph, rec["status"]))
+            elif rec.get("exit_code") is None:
+                # A success status WITHOUT an exit code is not a proven success.
+                failed.append((ph, "success_missing_exit_code"))
         return failed
 
     def finalize(self):
         failed = self._required_failures()
+        artifacts_verified = self.verify_artifacts() if self.artifact_destination else False
         if failed:
             if self.mode == "strict":
                 overall = "FAILED"
@@ -414,10 +454,13 @@ class AuditManifest:
             else:
                 overall = "PARTIAL"
                 stopped_at = None
+        elif not artifacts_verified:
+            # Never COMPLETE when artifact verification failed.
+            overall = "PARTIAL" if self.mode == "partial" else "FAILED"
+            stopped_at = None if self.mode == "partial" else (failed[0][0] if failed else None)
         else:
             overall = "COMPLETE"
             stopped_at = None
-        artifacts_verified = self.verify_artifacts() if self.artifact_destination else False
         return {
             "mode": self.mode,
             "channel": self.channel,
@@ -508,17 +551,14 @@ def main():
     for ph in REQUIRED_PHASES + list(OPTIONAL_PHASES):
         rec = data.get("phases", {}).get(ph)
         if rec:
+            # Success WITHOUT an exit code is invalid (validator rejects it).
+            if rec.get("status") == "success" and rec.get("exit_code") is None:
+                rec = dict(rec, status="failed", notes=(rec.get("notes", "") + " [validator: success with missing exit_code]").strip())
             m.record(ph, rec.get("skill", PHASE_SKILLS[ph]),
                      rec.get("command", ""), rec.get("exit_code"),
                      rec.get("status"), rec.get("artifact"), rec.get("notes", ""))
-    for c in data.get("claims", []):
-        m.add_claim(c.get("text", ""), c.get("evidence", "MEASURED"))
-    for ph, rec in (data.get("phases", {}) or {}).items():
-        if "thumbnail_evaluated" in rec:
-            m.set_thumbnail_analysis(
-                ph, bool(rec["thumbnail_evaluated"]),
-                rec.get("thumbnail_basis", "text"),
-                image_artifact_path=(rec.get("image_artifact_path") or rec.get("image_artifact")))
+    # Vision gate must be revalidated BEFORE thumbnail checks so
+    # thumbnail_evaluated gating sees the validated result.
     if data.get("vision_gate"):
         vg = data["vision_gate"]
         try:
@@ -526,9 +566,23 @@ def main():
                                  model=vg.get("model"), provider=vg.get("provider"),
                                  mechanism=vg.get("mechanism"),
                                  evidence_path=vg.get("evidence_path"),
-                                 thumbnail_files=vg.get("thumbnail_files"))
+                                 thumbnail_files=vg.get("thumbnail_files"),
+                                 probe=vg.get("probe"), observed=vg.get("observed"))
         except ValueError:
             m.vision_gate = {"status": "unverified", "error": "saved record failed re-validation"}
+    for c in data.get("claims", []):
+        m.add_claim(c.get("text", ""), c.get("evidence", "MEASURED"))
+    for ph, rec in (data.get("phases", {}) or {}).items():
+        if "thumbnail_evaluated" in rec:
+            try:
+                m.set_thumbnail_analysis(
+                    ph, bool(rec["thumbnail_evaluated"]),
+                    rec.get("thumbnail_basis", "text"),
+                    image_artifact_path=(rec.get("image_artifact_path") or rec.get("image_artifact")))
+            except ValueError:
+                # Downgrade an illegitimate thumbnail claim instead of crashing.
+                m.phases[ph]["thumbnail_evaluated"] = False
+                m.phases[ph]["thumbnail_basis"] = "invalid_claim_rejected"
 
     result = m.finalize()
     if args.write:
