@@ -107,8 +107,12 @@ class TestScorePackageHonesty(unittest.TestCase):
 
     def test_thumbnail_text_only_labeled_user_supplied(self):
         result = self.title.score_package("Test Title", thumb_text="WATCH THIS", keyword="test")
-        self.assertTrue(result["thumbnail_evaluated"])
+        self.assertFalse(result["thumbnail_evaluated"])
+        self.assertFalse(result["thumbnail_image_evaluated"])
+        self.assertTrue(result["thumbnail_text_evaluated"])
         self.assertEqual(result["thumbnail_basis"], "user_supplied_text")
+        self.assertEqual(result["thumbnail_status"], "TEXT ONLY - image NOT EVALUATED")
+        self.assertIsNone(result["thumbnail"]["image_score"])
         self.assertIn("NOT a visual evaluation", result["thumbnail_note"])
 
     def test_heuristic_note_disclaims_prediction(self):

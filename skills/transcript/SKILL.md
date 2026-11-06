@@ -30,6 +30,7 @@ A helper script lives at `scripts/gettranscript.py` (relative to this SKILL.md).
 python scripts/gettranscript.py "<url-or-id>" --format json
 python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
 python scripts/gettranscript.py "<url-or-id>" --lang mr,en
+python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 ### Linux/macOS (bash/zsh):
@@ -37,6 +38,7 @@ python scripts/gettranscript.py "<url-or-id>" --lang mr,en
 python scripts/gettranscript.py "<url-or-id>" --format json
 python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
 python scripts/gettranscript.py "<url-or-id>" --lang mr,en
+python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 ### Input formats accepted:
@@ -84,6 +86,8 @@ python scripts/gettranscript.py "<url-or-id>" --lang mr,en
 - Video may have non-English original language (e.g., Marathi `mr-orig`)
 - Auto-translated English is poor quality
 - You want to compare translations for accuracy
+
+`--all-langs` and other CLI flags are always parsed as options, never as video IDs. If an explicitly requested option cannot be satisfied, the script exits non-zero and reports it — it does **not** silently downgrade to a default-language transcript.
 
 ## Behavior & limits
 

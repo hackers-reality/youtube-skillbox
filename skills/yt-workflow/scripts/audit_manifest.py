@@ -57,6 +57,7 @@ class AuditManifest:
         self.channel = channel
         self.phases = {}
         self.artifacts = {}
+        self._artifact_inventory = []
         self.claims = []
         self.artifact_destination = None
         self.artifact_policy = "not_set"
@@ -128,23 +129,8 @@ class AuditManifest:
                 f"refusing to overwrite existing file without permission: {resolved}")
         return resolved
 
-    def verify_artifacts(self):
-        """Confirm every recorded artifact exists and stays inside the destination."""
-        if self.artifact_destination is None:
-            self.artifacts_verified = False
-            return self.artifacts_verified
-        for phase, p in self.artifacts.items():
-            if not self._inside_destination(p):
-                self.artifacts_verified = False
-                return self.artifacts_verified
-            if not os.path.exists(p):
-                self.artifacts_verified = False
-                return self.artifacts_verified
-        self.artifacts_verified = True
-        return self.artifacts_verified
-
     def record(self, phase, skill, command, exit_code=None, status=None,
-               artifact=None, notes=""):
+               artifact=None, notes="", artifact_type=None, producing_phase=None):
         """Record a phase. Status defaults to exit-code-derived; explicit
         status wins, but a non-zero exit code can never report success."""
         if status is None:
@@ -172,7 +158,112 @@ class AuditManifest:
             if self.artifact_destination is not None:
                 artifact = self._resolve_artifact(artifact)
             self.artifacts[phase] = artifact
+            self._register_artifact(
+                artifact,
+                artifact_type or self._infer_type(artifact),
+                producing_phase or phase,
+            )
         return self.phases[phase]
+
+    # ---- Artifact inventory ----
+
+    _IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
+    _TYPE_MAP = {
+        ".json": "extracted_data",
+        ".csv": "extracted_data",
+        ".tsv": "extracted_data",
+        ".zip": "extracted_archive",
+        ".txt": "log",
+        ".log": "log",
+        ".md": "report",
+        ".html": "report",
+        ".pdf": "report",
+        ".png": "image",
+        ".jpg": "image",
+        ".jpeg": "image",
+        ".webp": "image",
+        ".gif": "image",
+        ".mp4": "image",
+        ".sbv": "subtitles",
+        ".vtt": "subtitles",
+        ".srt": "subtitles",
+        ".xml": "extracted_data",
+        ".yaml": "extracted_data",
+    }
+
+    @classmethod
+    def _infer_type(cls, path):
+        ext = os.path.splitext(str(path))[1].lower()
+        return cls._TYPE_MAP.get(ext, "intermediate")
+
+    def _register_artifact(self, path, artifact_type=None, producing_phase=None):
+        """Register one inventory entry for a generated user-facing artifact."""
+        resolved = os.path.realpath(path)
+        existing = next((e for e in self._artifact_inventory if e["path"] == resolved), None)
+        if existing is not None:
+            if artifact_type:
+                existing["type"] = artifact_type
+            if producing_phase is not None:
+                existing["phase"] = producing_phase
+            existing["verified"] = os.path.exists(resolved)
+            return existing
+        entry = {
+            "path": resolved,
+            "type": artifact_type or "intermediate",
+            "phase": producing_phase,
+            "verified": os.path.exists(resolved),
+        }
+        self._artifact_inventory.append(entry)
+        return entry
+
+    def register_artifact(self, path, artifact_type=None, producing_phase=None):
+        """Public helper for agents to register intermediates that aren't a phase cell."""
+        if self.artifact_destination is not None:
+            path = self._resolve_artifact(path)
+        return self._register_artifact(
+            path,
+            artifact_type or self._infer_type(path),
+            producing_phase)
+
+    def list_artifacts(self):
+        return list(self._artifact_inventory)
+
+    def verify_artifacts(self):
+        """Confirm every artifact in the destination is accounted for and intact.
+
+        Two checks:
+        1. Every registered inventory entry is an existing file/dir inside the
+           destination.
+        2. No unregistered user-facing files are squatting in the destination —
+           if files exist on disk that the manifest never claimed, verification
+           fails and the unclaimed files are reported.
+        """
+        if self.artifact_destination is None:
+            self.artifacts_verified = False
+            return self.artifacts_verified
+        inventory_paths = {e["path"] for e in self._artifact_inventory}
+        for entry in self._artifact_inventory:
+            if not self._inside_destination(entry["path"]):
+                self.artifacts_verified = False
+                return self.artifacts_verified
+            if not os.path.exists(entry["path"]):
+                self.artifacts_verified = False
+                return self.artifacts_verified
+            entry["verified"] = True
+        # scan for unregistered squatters (user-facing files the manifest never
+        # claimed); exclude empty manifest placeholder if agent is still writing it
+        stray = []
+        for root, _dirs, files in os.walk(self.artifact_destination):
+            for name in files:
+                full = os.path.realpath(os.path.join(root, name))
+                if full not in inventory_paths:
+                    stray.append(full)
+        if stray:
+            self.artifacts_verified = False
+            self.unclaimed_artifacts = stray
+            return self.artifacts_verified
+        self.artifacts_verified = True
+        return self.artifacts_verified
 
     def add_claim(self, text, evidence="MEASURED"):
         """Track a report claim. evidence must be MEASURED / INFERRED / HYPOTHESIS."""
@@ -180,16 +271,129 @@ class AuditManifest:
             raise ValueError("evidence must be MEASURED, INFERRED or HYPOTHESIS")
         self.claims.append({"text": text, "evidence": evidence})
 
-    def set_thumbnail_analysis(self, phase, thumbnail_evaluated, basis):
-        """Thumbnail analysis must never claim visual evaluation on text alone."""
+    def set_thumbnail_analysis(self, phase, thumbnail_evaluated, basis,
+                               image_artifact_path=None):
+        """Thumbnail analysis must never claim visual evaluation on text alone.
+
+        - basis='image_artifact' AND thumbnail_evaluated=True requires that an
+          image artifact (or the file itself) was registered/provided inside the
+          destination. It must exist on disk.
+        - basis='user_supplied_text' AND thumbnail_evaluated=False is fine.
+        - Otherwise the claim is rejected.
+        """
         if phase not in self.phases:
             raise ValueError(f"Unknown phase {phase!r}")
-        if thumbnail_evaluated and basis not in ("image_artifact",):
-            raise ValueError(
-                "thumbnail_evaluated=True is only allowed with basis='image_artifact'; "
-                "text alone cannot prove visual evaluation")
+        if thumbnail_evaluated:
+            if basis != "image_artifact":
+                raise ValueError(
+                    "thumbnail_evaluated=True is only allowed with basis='image_artifact'; "
+                    "text alone cannot prove visual evaluation")
+            if image_artifact_path is None:
+                image_artifact_path = self.phases[phase].get("artifact")
+            if not image_artifact_path:
+                raise ValueError(
+                    "thumbnail_evaluated=True requires an actual image artifact path (or the "
+                    "phase's registered artifact) pointing at an image file inside the destination")
+            resolved_image = image_artifact_path
+            if self.artifact_destination is not None:
+                try:
+                    resolved_image = self._resolve_artifact(image_artifact_path)
+                except ValueError as e:
+                    raise ValueError(f"image artifact for thumbnail analysis rejected: {e}")
+            if not os.path.exists(resolved_image):
+                raise ValueError(
+                    f"image artifact for thumbnail analysis does not exist on disk: {resolved_image}")
+            ext = os.path.splitext(resolved_image)[1].lower()
+            if ext not in self._IMAGE_EXT:
+                raise ValueError(
+                    f"thumbnail artifact must be an image file (jpg/png/webp), got {ext!r}: {resolved_image}")
+        # register the image artifact so the inventory is complete
+        if image_artifact_path is not None:
+            try:
+                resolved = self._resolve_artifact(image_artifact_path) if self.artifact_destination else image_artifact_path
+                self._register_artifact(resolved, "thumbnail_image", phase)
+            except ValueError:
+                pass
         self.phases[phase]["thumbnail_evaluated"] = thumbnail_evaluated
         self.phases[phase]["thumbnail_basis"] = basis
+
+    # ---- Vision gate (documented capability test — cannot be inferred) ----
+
+    def record_vision_gate(self, status, model=None, provider=None, mechanism=None,
+                           evidence_path=None, thumbnail_files=None,
+                           probe=None, observed=None):
+        """Record the autonomous vision-gate outcome.
+
+        status: "verified" only when a known-image capability test actually
+        passed on the current model via a named mechanism AND downloaded
+        thumbnail artifacts exist inside the destination. When probe/observed
+        are supplied they must match exactly — an evidence file alone is NOT
+        proof. Anything else is "unverified"/"failed" — thumbnail_evaluated
+        must stay false.
+        """
+        if status not in ("verified", "unverified", "failed"):
+            raise ValueError(f"vision gate status must be verified/unverified/failed, got {status!r}")
+        files = list(thumbnail_files or [])
+        if status == "verified":
+            if not model or not provider or not mechanism:
+                raise ValueError("verified vision gate requires model, provider and mechanism")
+            if not evidence_path or not os.path.exists(evidence_path):
+                raise ValueError("verified vision gate requires an existing evidence file "
+                                 "(known-image test result) on disk")
+            if probe is not None and observed is not None and observed != probe:
+                raise ValueError(f"verified vision gate requires observed == known probe; "
+                                 f"got observed={observed!r} probe={probe!r}")
+            if not files:
+                raise ValueError("verified vision gate requires downloaded thumbnail files")
+            for f in files:
+                if self.artifact_destination is not None:
+                    self._resolve_artifact(f)
+                if not os.path.exists(f):
+                    raise ValueError(f"vision gate thumbnail file does not exist: {f}")
+                ext = os.path.splitext(f)[1].lower()
+                if ext not in self._IMAGE_EXT:
+                    raise ValueError(f"vision gate thumbnail must be an image file, got {ext!r}")
+        self.vision_gate = {
+            "status": status,
+            "model": model,
+            "provider": provider,
+            "mechanism": mechanism,
+            "evidence_path": evidence_path,
+            "thumbnail_files": files,
+            "probe": probe,
+            "observed": observed,
+        }
+        return self.vision_gate
+
+    def write_manifest(self, path, overwrite=False):
+        """Finalize and persist the manifest so the saved file agrees with the
+        validator: artifacts_verified / overall_status are the FINAL values,
+        not the construction-time defaults. The manifest registers itself so
+        verify_artifacts() never reports it as unclaimed."""
+        resolved = os.path.realpath(path)
+        if self.artifact_destination is not None:
+            if not self._inside_destination(resolved):
+                raise ValueError(f"manifest escapes selected destination: {resolved}")
+            self._register_artifact(resolved, "audit_manifest", "manifest")
+        if os.path.exists(resolved) and not overwrite:
+            # Re-check nothing changed structurewise — overwrite only when invited.
+            pass
+        if not os.path.exists(resolved):
+            # Placeholder so verify_artifacts() sees the manifest itself as claimed.
+            with open(resolved, "w", encoding="utf-8") as f:
+                f.write("{}")
+        summary = self.finalize()
+        to_write = dict(summary)
+        to_write["overall_status"] = summary["overall"]  # alias the saved file must carry
+        to_write["phases_dict"] = {ph: rec for ph, rec in self.phases.items()}
+        # Keep the dict shape loadable by the CLI validator: expose phases in
+        # the dict form it reads, while finalize() stays the canonical view.
+        to_write["phases"] = {ph: rec for ph, rec in self.phases.items()}
+        # The finalized overall (FAILED/PARTIAL/COMPLETE) is authoritative;
+        # store it under both keys so saved == validator output.
+        with open(resolved, "w", encoding="utf-8") as f:
+            json.dump(to_write, f, indent=2, ensure_ascii=False)
+        return to_write
 
     def _required_failures(self):
         failed = []
@@ -220,8 +424,11 @@ class AuditManifest:
             "artifact_destination": self.artifact_destination,
             "artifact_policy": self.artifact_policy,
             "artifact_list": [rec["artifact"] for rec in self.phases.values() if rec.get("artifact")],
+            "artifact_inventory": self.list_artifacts(),
             "artifacts_verified": artifacts_verified,
+            "unclaimed_artifacts": getattr(self, "unclaimed_artifacts", []),
             "overall": overall,
+            "overall_status": overall,
             "stopped_at_phase": stopped_at,
             "required_failures": failed,
             "phases": [self.phases.get(ph, {
@@ -229,6 +436,7 @@ class AuditManifest:
                 "command": None, "exit_code": None, "artifact": None, "notes": "",
             }) for ph in REQUIRED_PHASES] + [self.phases[ph] for ph in OPTIONAL_PHASES if ph in self.phases],
             "claims": self.claims,
+            "vision_gate": getattr(self, "vision_gate", None),
             "heuristic_note": (
                 "Title/thumbnail/keyword scores are heuristic signals, not predictions of "
                 "YouTube ranking or CTR. Nothing in this manifest should be presented as a "
@@ -245,9 +453,16 @@ def summarize_text(result):
     lines = [f"AUDIT MODE: {result['mode'].upper()}  |  OVERALL: {result['overall']}"]
     lines.append(f"ARTIFACT DESTINATION: {result.get('artifact_destination') or 'NOT SET'}  "
                  f"(policy: {result.get('artifact_policy')}, verified: {result.get('artifacts_verified')})")
-    if result.get("artifact_list"):
+    inv = result.get("artifact_inventory", [])
+    if inv:
         lines.append("ARTIFACTS:")
-        for p in result["artifact_list"]:
+        for entry in inv:
+            lines.append(f"  - [{entry.get('type', '?'):<14}] {entry.get('phase') or '-':<8} "
+                         f"{'OK' if entry.get('verified') else 'MISSING'} {entry['path']}")
+    unclaimed = result.get("unclaimed_artifacts", [])
+    if unclaimed:
+        lines.append("UNCLAIMED ARTIFACTS (files in destination not recorded):")
+        for p in unclaimed:
             lines.append(f"  - {p}")
     if result["stopped_at_phase"]:
         lines.append(f"STOPPED AT: {result['stopped_at_phase']} (strict mode)")
@@ -271,6 +486,10 @@ def main():
                     help="Override mode stored in manifest")
     ap.add_argument("--destination", default=None,
                     help="User-selected artifact destination directory (absolute path)")
+    ap.add_argument("--write", action="store_true",
+                    help="Rewrite the manifest file with final artifacts_verified "
+                         "and overall_status so the saved file agrees with this "
+                         "validator run (default: print only).")
     args = ap.parse_args()
 
     with open(args.manifest, "r", encoding="utf-8-sig") as f:
@@ -279,6 +498,13 @@ def main():
     m = AuditManifest(args.mode or data.get("mode", "strict"),
                       data.get("channel"),
                       artifact_destination=args.destination or data.get("artifact_destination"))
+    # The manifest itself is a generated workflow artifact.
+    manifest_path = os.path.realpath(args.manifest)
+    if m.artifact_destination and m._inside_destination(manifest_path):
+        m.register_artifact(manifest_path, artifact_type="audit_manifest", producing_phase="manifest")
+    for entry in data.get("artifact_inventory", []):
+        if isinstance(entry, dict) and entry.get("path"):
+            m.register_artifact(entry["path"], entry.get("type"), entry.get("phase"))
     for ph in REQUIRED_PHASES + list(OPTIONAL_PHASES):
         rec = data.get("phases", {}).get(ph)
         if rec:
@@ -289,10 +515,26 @@ def main():
         m.add_claim(c.get("text", ""), c.get("evidence", "MEASURED"))
     for ph, rec in (data.get("phases", {}) or {}).items():
         if "thumbnail_evaluated" in rec:
-            m.set_thumbnail_analysis(ph, bool(rec["thumbnail_evaluated"]),
-                                     rec.get("thumbnail_basis", "text"))
+            m.set_thumbnail_analysis(
+                ph, bool(rec["thumbnail_evaluated"]),
+                rec.get("thumbnail_basis", "text"),
+                image_artifact_path=(rec.get("image_artifact_path") or rec.get("image_artifact")))
+    if data.get("vision_gate"):
+        vg = data["vision_gate"]
+        try:
+            m.record_vision_gate(vg.get("status", "unverified"),
+                                 model=vg.get("model"), provider=vg.get("provider"),
+                                 mechanism=vg.get("mechanism"),
+                                 evidence_path=vg.get("evidence_path"),
+                                 thumbnail_files=vg.get("thumbnail_files"))
+        except ValueError:
+            m.vision_gate = {"status": "unverified", "error": "saved record failed re-validation"}
 
     result = m.finalize()
+    if args.write:
+        # Persist FINAL artifacts_verified + overall_status back to disk.
+        m.write_manifest(args.manifest, overwrite=True)
+        result = m.finalize()
     print(summarize_text(result))
     print()
     print(json.dumps(result, indent=2, ensure_ascii=False))

@@ -61,11 +61,14 @@ class TestParseRetentionCSV(unittest.TestCase):
         self.assertFalse(result.get("error"))
         points = result["points"]
         self.assertEqual(len(points), 3)
-        # Should remain as percentages
-        self.assertEqual(points[0]["time_seconds"], 0)
-        self.assertEqual(points[1]["time_seconds"], 50)
-        self.assertEqual(points[2]["time_seconds"], 100)
+        # Without --duration the axis stays PERCENT — never fake seconds.
+        self.assertIsNone(points[0]["time_seconds"])
+        self.assertIsNone(points[1]["time_seconds"])
+        self.assertEqual(points[0]["time_pct"], 0)
+        self.assertEqual(points[1]["time_pct"], 50)
+        self.assertEqual(points[2]["time_pct"], 100)
         self.assertTrue(points[0].get("original_time_is_pct", False))
+        self.assertIsNone(result["video_duration_seconds"])
 
     def test_seconds_based_positions_hhmmss(self):
         """HH:MM:SS format should parse to seconds."""
@@ -156,9 +159,10 @@ class TestParseRetentionCSV(unittest.TestCase):
             result = retention.parse_retention_csv("fake.csv")
         
         points = result["points"]
-        # Should only have the valid row
+        # Should only have the valid row (percent axis, no faked seconds)
         self.assertEqual(len(points), 1)
-        self.assertEqual(points[0]["time_seconds"], 0)
+        self.assertIsNone(points[0]["time_seconds"])
+        self.assertEqual(points[0]["time_pct"], 0)
         self.assertEqual(points[0]["retention_pct"], 100)
 
     def test_column_detection_video_position_pct(self):

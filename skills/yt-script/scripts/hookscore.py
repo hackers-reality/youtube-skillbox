@@ -8,6 +8,7 @@ NO formulas, NO biases, NO heuristics - pure mathematical analysis.
 Outputs raw statistical features that ANY channel type can use.
 """
 import json
+import os
 import re
 import sys
 import argparse
@@ -225,6 +226,45 @@ def extract_first_n_seconds(transcript: List[Dict], n_seconds: int = 15) -> str:
     return " ".join(segments)
 
 
+def resolve_gettranscript():
+    """Find gettranscript.py relative to THIS file — cwd-independent.
+
+    Repo layout: skills/yt-script/scripts/hookscore.py
+    -> skills/transcript/scripts/gettranscript.py (skills root = parents[2]).
+    Installed layout (opencode skills dir) mirrors it. Walk up as fallback
+    so a repo checkout at any depth still resolves.
+    """
+    here = Path(__file__).resolve()
+    # here: .../yt-script/scripts/hookscore.py ; skills root = parents[2]
+    skills_root = here.parents[2]
+    cand = skills_root / "transcript" / "scripts" / "gettranscript.py"
+    if cand.exists():
+        return cand
+    for parent in here.parents:
+        cand = parent / "skills" / "transcript" / "scripts" / "gettranscript.py"
+        if cand.exists():
+            return cand
+        cand = parent / "transcript" / "scripts" / "gettranscript.py"
+        if cand.exists():
+            return cand
+    return cand  # last resort: expected repo path (for a clear error message)
+
+
+def run_fetcher(args, timeout=180):
+    """Run gettranscript.py and decode its output ROBUSTLY.
+
+    Windows consoles default to cp1252; yt-dlp may emit non-UTF-8 bytes
+    (observed 0x8f). Without explicit encoding/errors the OS locale decoder
+    raises UnicodeDecodeError inside subprocess's reader thread and
+    result.stdout comes back None. Always decode UTF-8 with replacement.
+    """
+    import subprocess
+    return subprocess.run(
+        [sys.executable, str(resolve_gettranscript())] + list(args),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=timeout)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Pure mathematical hook analysis - first N seconds")
     parser.add_argument("input", help="Transcript JSON file or video ID")
@@ -240,12 +280,14 @@ def main():
         if isinstance(transcript, dict) and "transcript" in transcript:
             transcript = transcript["transcript"]
     else:
-        # Fetch transcript via gettranscript.py
-        import subprocess
-        result = subprocess.run([
-            sys.executable, "skills/transcript/scripts/gettranscript.py",
-            args.input, "--format", "json"
-        ], capture_output=True, text=True, cwd=".")
+        # Fetch transcript via gettranscript.py (cwd-independent resolution)
+        gt = resolve_gettranscript()
+        if not gt.exists():
+            print(f"ERROR: gettranscript.py not found (resolved: {gt}). "
+                  f"Expected it under the skills/ tree next to this script; "
+                  f"cwd={os.getcwd()}", file=sys.stderr)
+            sys.exit(1)
+        result = run_fetcher([args.input, "--format", "json"])
         if result.returncode != 0:
             print(f"ERROR: {result.stderr}", file=sys.stderr)
             sys.exit(1)

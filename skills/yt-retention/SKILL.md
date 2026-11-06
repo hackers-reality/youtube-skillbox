@@ -5,7 +5,9 @@ description: >-
   actually leave, then say what to change. Use for "why do people stop
   watching", "my retention is bad", a pasted retention chart or CSV, or "fix
   my pacing".
----**Pipeline Position:** Phase 7 — Retention Analysis (optional)
+---
+
+**Pipeline Position:** Phase 7 — Retention Analysis (optional)
 **Inputs:** YouTube Studio retention CSV export from user
 **Outputs:** Drop-off points, retention curves → feeds yt-workflow (agent synthesizes)
 **Triggers:** why do people stop watching, retention is bad, fix my pacing
@@ -25,12 +27,28 @@ The retention graph is the only honest feedback YouTube gives you. Almost nobody
 ```bash
 python3 retention.py retention.csv --duration 600
 python3 retention.py retention.csv --transcript transcript.srt
+python3 retention.py /path/to/Studio-export/ --dir          # inventory EVERY CSV, not just All.csv
 ```
 
-Getting the file: Studio -> a video -> Analytics -> Engagement -> the audience-retention chart ->
-the download icon -> "Audience retention".
+Getting the export: Studio -> a video -> Analytics -> Engagement -> the audience-retention chart ->
+the download icon -> "Audience retention". **YouTube Studio's export is a ZIP of multiple CSVs** — not a single file. Do not analyze `All.csv` alone; run the `--dir` inventory first and read every CSV it finds.
 
-**Agent behavior**: If no CSV is provided, **ask the user to export and upload it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip to the final synthesis."*
+## Multi-CSV exports — what each file actually measures
+
+| File | Measures | You must NOT claim |
+|------|----------|--------------------|
+| `All.csv` | Absolute retention, all viewers | "X% of viewers are/were..." |
+| `Subscribers and non-subscribers.csv` | Segmented retention curves (sub vs non-sub) | "% of viewers who are subscribers" |
+| `New and returning viewers.csv` | Segmented retention curves (new vs returning) | "% of viewers who are new vs returning" |
+| `New, casual and regular viewers.csv` | Segmented retention curves (watch frequency) | audience-size proportions |
+| `Organic and paid traffic.csv` | Segmented retention by traffic source | overall organic vs paid share |
+| `Organic.csv` | Retention, organic traffic only | any paid comparison |
+| `Skippable video ad.csv` / `Video discovery ad.csv` | Retention of ad views | organic performance |
+| `Detailed activity.csv` | Per-position started/stopped/moments-seen counts | proportions of audience |
+
+**Rule: none of these CSVs proves audience proportions, traffic shares or demographics unless the columns explicitly contain those measures.** Label findings as MEASURED / INFERRED / HYPOTHESIS. Values >100% in absolute retention mean rewatches/loops, not ">100% of the audience".
+
+**Agent behavior**: If no CSV is provided, **ask the user to export and upload it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). It's a ZIP of several CSVs — upload it all if possible. If not, I'll skip to the final synthesis."*
 
 ## Three different problems
 

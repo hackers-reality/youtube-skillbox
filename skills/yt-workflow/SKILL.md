@@ -11,6 +11,8 @@ description: Chain youtube → transcript → yt-script → yt-package → yt-se
 
 After installing the package (`pip install -e .`), the **`ytdata`** command is available globally. Use it directly instead of `python skills/youtube/scripts/ytdata.py`:
 
+> **Regression rule:** always execute from the repo root (`E:/youtube-skillbox` in a checkout) and verify the script path you ran is the working tree, not a stale installed copy under `~/.config/opencode/skills`. Confirm with `python -c "import pathlib; print(pathlib.Path('skills/youtube/scripts/ytdata.py').resolve())"` before trusting results.
+
 ```bash
 # Before (repo-root relative paths)
 python skills/youtube/scripts/ytdata.py sections "@handle"
@@ -80,12 +82,12 @@ python skills/youtube/scripts/ytdata.py profile "@handle"
 
 **Windows PowerShell:**
 ```powershell
-python skills\transcript\scripts\gettranscript.py "<video_id>" --format json --all-langs
+python skills\transcript\scripts\gettranscript.py "<video_id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 **Linux/macOS:**
 ```bash
-python skills/transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs
+python skills/transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 ### Phase 3: Hook Analysis (yt-script skill)
@@ -101,11 +103,22 @@ python skills/yt-script/scripts/hookscore.py "<transcript_file.json>" --json
 
 ### Phase 4: Title/Thumbnail Analysis (yt-package skill)
 
-**Load the yt-package skill and run its script — do not approximate it with ytdata:**
+**Load the yt-package skill and run its script — do not approximate it with ytdata. Keep title and thumbnail evaluation separate.**
 
 ```bash
 # Score titles from channel data (using --file with JSON):
 python skills/yt-package/scripts/title.py --file titles.json --json
+
+# Vision gate (RUN this before ANY image claim; text-only scoring proves nothing):
+python skills/yt-package/scripts/vision_gate.py "<video_id>" --destination "<artifact-destination>" \
+    --model "<exact-model>" --provider "<provider>" --mechanism "<harness mechanism>" --json
+# Step 1 (no --observation): generates vision-probe.png + sidecar truth.
+# Step 2: ACTUALLY READ vision-probe.png on that model via the mechanism.
+# Step 3 (re-run): add --observation '<destination>/observation.json' containing
+#   {"model": ..., "provider": ..., "mechanism": ..., "observed": "<exact probe string>"}
+# Exit 0 = verified (observed == known probe + images downloaded).
+# Exit 1 = NOT VERIFIED -> keep thumbnail_evaluated:false / NOT EVALUATED. No shortcuts.
+# A bare evidence file never verifies — only a matching observed probe does.
 ```
 
 Example `titles.json`:
@@ -121,7 +134,15 @@ Example `titles.json`:
 }
 ```
 
-> **Thumbnail honesty rule:** The `thumb` field is **user-supplied TEXT**. This skill scores *text*, never images. You may NOT claim you "analyzed the thumbnail image", "checked contrast", "evaluated the face", "scored the actual thumbnail", or invented text that was not supplied. If no thumbnail text/image was provided, the thumbnail phase is **not evaluated** — say so (`thumbnail_evaluated: false`). If an actual thumbnail image was supplied, you must say it is image-derived.
+> **Thumbnail honesty rule:** The `thumb` field is **user-supplied TEXT**. `title.py` scores text, never images. Text alone cannot justify `thumbnail_evaluated: true`. If no image was actually inspected, say **"Thumbnail NOT EVALUATED"**.
+>
+> **Vision gate (required before any image claim):**
+> 1. Inspect the configured agent model/provider. Do not infer vision from the model name or its provider.
+> 2. Verify image input through the harness image/file mechanism with a known test image on the same model. Record the model/provider and mechanism (`audio?` no; image attachment, image file tool, or API input) in the manifest.
+> 3. Download each actual thumbnail image into the selected artifact destination with a command whose output path is inside it (for example, download from `ytdata info` metadata or yt-dlp thumbnail extraction). Never analyze an image URL, filename or title alone.
+> 4. Only after that capability test passes, pass the downloaded image file(s) to the vision-capable model and evaluate visual hierarchy, contrast, readability, subject placement, text visibility and relevance to the video promise.
+> 5. Separate **MEASURED visual observations** from **subjective recommendations**. If the image is unavailable or the vision capability test fails, report `thumbnail_evaluated: false`, `thumbnail_basis: "vision_not_verified"`, and use `NOT EVALUATED` in the user-facing report.
+> 6. Do not claim CTR prediction or guaranteed performance from any visual observation. Where image evidence is insufficient to compare the thumbnail promise with actual content, say that and do not fill the gap.
 
 > **Heuristic disclaimer:** title.py scores are **heuristic quality signals**, not predictions of CTR or ranking. Never present them as "this will get X% CTR" or "YouTube will rank this #N".
 
@@ -153,11 +174,21 @@ python skills/youtube/scripts/ytdata.py outliers "@handle" --min-ratio 2.0 --tab
 ### Phase 7: Retention Analysis (yt-retention skill) — OPTIONAL but HIGH-LEVERAGE
 
 ```bash
-# If user provides CSV export:
-python skills/yt-retention/scripts/retention.py retention.csv --json
+# Inventory EVERY CSV in the Studio export (never All.csv alone):
+python skills/yt-retention/scripts/retention.py "/path/to/Studio-export/" --dir --json
+
+# Then analyze the audience-retention curve. --duration is REQUIRED:
+# use the video's actual duration (ytdata info duration_seconds / transcript
+# metadata duration_seconds). WITHOUT --duration the axis is PERCENT-only —
+# never read the numbers as seconds.
+python skills/yt-retention/scripts/retention.py "/path/to/Studio-export/All.csv" --json --duration <seconds> [--transcript transcript.json]
 ```
 
-**Agent behavior**: If no CSV provided, **ask the user to export it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention CSV from YouTube Studio (Analytics → Engagement → Audience Retention → Download). Can you upload it? If not, I'll skip."*
+The Studio export is a **ZIP of many CSVs** — All.csv, Detailed activity.csv, Subscribers and non-subscribers.csv, New and returning viewers.csv, Organic and paid traffic.csv, Organic.csv, ad-traffic CSVs, and New, casual and regular viewers.csv. Inspect them all.
+
+**Do NOT infer audience proportions, traffic shares or demographics** — the files are segmented retention curves, not share metrics. Absolute retention >100% = loops/rewatches, not ">100% of viewers". Label every claim `MEASURED`/`INFERRED`/`HYPOTHESIS`.
+
+**Agent behavior**: If no CSV is provided, **ask the user to export it** — this phase is optional but high-leverage. Say: *"For retention analysis, I need the audience-retention export from YouTube Studio (Analytics → Engagement → Audience Retention → Download). It's a ZIP of several CSVs — upload it all if possible. If not, I'll skip."*
 
 ---
 
@@ -190,11 +221,17 @@ Example manifest:
 }
 ```
 
-Then (optionally but recommended) validate it:
+Then (required at the end, not optional) finalize it INTO the file:
+`--write` rewrites manifest.json with the FINAL artifacts_verified and
+overall_status so the saved file agrees with the validator output:
 
 ```bash
-python skills/yt-workflow/scripts/audit_manifest.py --manifest D:/YouTube/Audits/November-2026/manifest.json --mode strict --destination D:/YouTube/Audits/November-2026
+python skills/yt-workflow/scripts/audit_manifest.py --manifest D:/YouTube/Audits/November-2026/manifest.json --mode strict --destination D:/YouTube/Audits/November-2026 --write
 ```
+
+Then re-read the saved manifest and confirm `artifacts_verified` and
+`overall_status` match the validator's output. A saved `artifacts_verified: false`
+next to a validator `verified: true` is a divergence bug — do not ship it.
 
 **Manifest rules:**
 - Record **every** phase you attempt, with the actual command, exit code, artifact path, and status: `success` | `failed` | `blocked` | `skipped` | `not_run`.
@@ -270,7 +307,7 @@ Never present a **HYPOTHESIS** as **MEASURED**. Never invent numbers, views, sco
 | 1 | youtube | @handle | Channel data (sections, videos, home, profile) |
 | 2 | transcript | Top 3 video IDs | Full transcripts (JSON + timestamps) |
 | 3 | yt-script | Transcripts | Hook metrics (words/sec, questions, numbers, second-person, etc.) per video |
-| 4 | yt-package | Titles + hook scores | Title/thumbnail scores + briefs |
+| 4 | yt-package | Titles + hook scores | Title text scores (heuristic); thumbnail image status or NOT EVALUATED |
 | 5 | youtube (data) | Niche + target video | Keywords (opportunity), competition scores, scorecards |
 | 6 | youtube (data) | Channel + niche | Outliers (views/subs ratio), competitor gaps |
 | 7 | yt-retention | Studio CSV (optional) | Drop-off points, retention curves |
@@ -308,7 +345,7 @@ Final answer = ONE biggest fix, 3 working things, what NOT to do.
 | 1 | youtube | Channel profile, videos list, sections, home tab data |
 | 2 | transcript | Transcript JSON per video |
 | 3 | yt-script | Hook metrics per video (raw stats, not a 0-100 score) |
-| 4 | yt-package | Title/thumbnail scores (heuristic, not CTR predictions) |
+| 4 | yt-package | Title text scores (heuristic); thumbnail image NOT EVALUATED unless vision gate passed |
 | 5 | youtube (data) | Keywords (opportunity_score), competition (competition_score), scorecard |
 | 6 | youtube (data) | Outlier videos (views/subs ratio), velocity |
 | 7 | yt-retention | Retention curves, drop-off points (optional) |
