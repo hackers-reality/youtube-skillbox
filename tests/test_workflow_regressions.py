@@ -545,12 +545,12 @@ class TestRetryFlags(unittest.TestCase):
         import pathlib
         src = pathlib.Path(TRANSCRIPT_PATH).read_text(encoding="utf-8")
         self.assertIn('"--retries", "10"', src)
-        self.assertIn('"--extractor-retries", "5"', src)
+        self.assertIn('"--extractor-retries", "10"', src)
         self.assertIn('"--retry-sleep"', src)
-        self.assertIn('"http:linear=1::2"', src)
-        self.assertIn('"extractor:exp=1:30"', src)
-        self.assertIn('"--sleep-subtitles"', src)
-        self.assertIn('"--sleep-requests"', src)
+        self.assertIn('"http:linear=2::5"', src)
+        self.assertIn('"extractor:exp=2:60"', src)
+        self.assertIn('"--sleep-subtitles", "2"', src)
+        self.assertIn('"--sleep-requests", "1.5"', src)
 
     def test_all_langs_never_falls_back_after_429(self):
         transcript = load_module(TRANSCRIPT_PATH, "gettranscript_429_test")
