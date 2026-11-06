@@ -61,20 +61,35 @@ def image_type(path: Path):
 
 
 def make_known_image(path: Path, probe: str):
-    """Render the probe string on a solid background. PIL is available in the
-    dev env; a pure-stdlib PPM fallback keeps it working without PIL."""
+    """Render the probe as PLAIN READABLE TEXT (v0.4.9).
+
+    The earlier block-code encoding was ambiguous in previews and could not
+    be reliably decoded by the image-reading mechanism. Now the exact probe
+    string is drawn as white text on a black background in a large canvas,
+    so a competent image reader recovers it verbatim.
+    """
     try:
-        from PIL import Image, ImageDraw
-        W, H = 800, 200
+        from PIL import Image, ImageDraw, ImageFont
+        # Big canvas; text scaled up so previews stay legible.
+        W, H = 1600, 400
         img = Image.new("RGB", (W, H), color=(0, 0, 0))
         d = ImageDraw.Draw(img)
-        # Blocky 5x7 pixel font so the probe is unambiguous to read.
-        for i, ch in enumerate(probe):
-            x = 20 + i * 30
-            val = ord(ch) % 26
-            for bit in range(5):
-                if val & (1 << bit):
-                    d.rectangle([x, 20 + bit * 22, x + 22, 20 + bit * 22 + 18], fill=(255, 255, 255))
+        font = None
+        for scale in (48, 32, 24, 16):
+            try:
+                font = ImageFont.truetype("arial.ttf", scale)
+                break
+            except Exception:
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+        # Center the probe text.
+        try:
+            bbox = d.textbbox((0, 0), probe, font=font)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        except Exception:
+            tw, th = len(probe) * 20, 30
+        d.text(((W - tw) // 2, (H - th) // 2), probe, fill=(255, 255, 255), font=font)
         img.save(path)
         return
     except Exception:
