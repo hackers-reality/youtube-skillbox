@@ -126,12 +126,32 @@ def _list_subtitle_langs(vid):
         info = json.loads(proc.stdout)
     except json.JSONDecodeError:
         return None
+    return _langs_from_info(info)
+
+
+def _langs_from_info(info):
     langs = set()
     for key in ("subtitles", "automatic_captions"):
         for lang in (info.get(key) or {}):
             langs.add(lang)
     ranked = sorted(langs)
     return ranked[:40] or None
+
+
+def _detect_original_lang(info):
+    """Best-effort original spoken language: prefer a manual `*-orig` track,
+    then an `en-orig`/`en` manual track, else the first automatic caption
+    (auto captions are usually in the spoken language). Returns a lang code
+    or None. Pure heuristic — never fabricated from the title."""
+    for key in ("subtitles", "automatic_captions"):
+        tracks = info.get(key) or {}
+        for lang in sorted(tracks):
+            if lang.endswith("-orig"):
+                return lang[: -len("-orig")]
+        for lang in sorted(tracks):
+            if lang == "en":
+                return "en"
+    return None
 
 
 def _batch_langs(all_langs_list, batch_size=10):
@@ -395,6 +415,9 @@ def main():
                     help="Comma-separated language priority list (default: en)")
     ap.add_argument("--all-langs", action="store_true",
                     help="Fetch ALL available subtitle tracks (manual + auto) and return all in JSON")
+    ap.add_argument("--original-lang", action="store_true",
+                    help="Detect the original spoken language and fetch ONLY original + English "
+                         "(2 requests max — never bursts every auto track; recommended default)")
     ap.add_argument("--work-dir", default=None,
                     help="Directory for downloaded caption intermediates; use the user-selected artifact destination in workflow runs")
     ap.add_argument("--no-meta", action="store_true", help="Skip metadata lookup (faster)")
@@ -407,6 +430,50 @@ def main():
 
     vid = normalize_id(args.url)
     langs = [l.strip() for l in args.lang.split(",") if l.strip()]
+
+    if args.original_lang:
+        # Original + English only (avoids the --all-langs 429 burst).
+        enum = _list_subtitle_langs(vid)
+        info_for_en = {}
+        if enum:
+            # Re-use enumeration to guess original.
+            proc = run_ytdlp(["--skip-download", "--no-warnings", "--dump-single-json",
+                              f"https://www.youtube.com/watch?v={vid}"], timeout=45)
+            if proc and proc.stdout.strip():
+                try:
+                    info_for_en = json.loads(proc.stdout)
+                except json.JSONDecodeError:
+                    info_for_en = {}
+            original = _detect_original_lang(info_for_en) if info_for_en else None
+        else:
+            # Fallback: _list_subtitle_langs already returned None — try single fetch.
+            original = None
+        want = []
+        if original:
+            want.append(original)
+        if original != "en":
+            want.append("en")
+        if not want:
+            die(f"ORIGINAL-LANG fetch failed for {vid}: could not enumerate subtitle languages or detect original.")
+        files, _ = fetch_subtitle_files(vid, want, work_dir=args.work_dir)
+        segs = parse_json3(files[0]) if files else []
+        if not segs:
+            die("Transcript file was empty — the tracks may have no text cues.")
+        meta = {} if args.no_meta else fetch_metadata(vid)
+        vid = _validate_video_identity(vid, meta)
+        payload = {
+            "video_id": vid,
+            "original_language": original,
+            "primary": "en",
+            "has_english": "en" in (enum or []),
+            "language": guess_lang(files[0]) if files else None,
+            "generated": is_generated(files[0]) if files else True,
+            "segment_count": len(segs),
+            "metadata": meta or None,
+            "transcript": segs,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
 
     if args.all_langs:
         try:
