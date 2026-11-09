@@ -67,6 +67,78 @@ def _is_429(proc):
     return bool(_re.search(r"\b429\b", err) or "too many requests" in err or "rate-limited" in err or "rate limited" in err)
 
 
+def _collect_files(tmpdir, vid):
+    """Files belonging to vid written by this invocation (new or mtime-changed... tracked by _run_batch append)."""
+    return [os.path.join(tmpdir, f) for f in sorted(os.listdir(tmpdir))
+            if f.endswith(".json3") and f.startswith(f"{vid}.")]
+
+
+def _run_batch(tmpdir, vid, batchspec, retries=3, sleep=1.0, timeout=60):
+    """Run one --sub-langs batch; per-batch snapshot keeps stales out."""
+    before = {}
+    for name in os.listdir(tmpdir):
+        try:
+            before[name] = os.path.getmtime(os.path.join(tmpdir, name))
+        except OSError:
+            continue
+    # NOTE: no --no-warnings here — a 429 must surface in stderr so _is_429
+    # can classify it as an explicit throttle failure, not "no stderr".
+    args = [
+        "--skip-download",
+        "--write-subs",
+        "--write-auto-subs",
+        "--sub-langs", batchspec,
+        "--sub-format", "json3",
+        "--retries", "5",
+        "--extractor-retries", "5",
+        "--retry-sleep", "http:exp=1:10",
+        "--retry-sleep", "extractor:exp=1:10",
+        "--sleep-subtitles", "2",
+        "--sleep-requests", "1",
+        "-o", os.path.join(tmpdir, "%(id)s"),
+        f"https://www.youtube.com/watch?v={vid}",
+    ]
+    proc = None
+    attempt = 0
+    while True:
+        attempt += 1
+        proc = run_ytdlp(args, timeout=timeout)
+        if not _is_429(proc) or attempt > retries:
+            break
+        import time as _time
+        _time.sleep(sleep * (2 ** (attempt - 1)))
+    return proc
+
+
+def _list_subtitle_langs(vid):
+    """Enumerate available subtitle languages. Returns sorted list or None.
+
+    Capped at 40 languages: fetching ALL auto-translated tracks (~150) is what
+    triggers the 429 burst — capping keeps the blast radius survivable while
+    still returning far more than the single-lang default. The cap is explicit
+    in the payload note, never silent.
+    """
+    proc = run_ytdlp(["--skip-download", "--no-warnings", "--dump-single-json",
+                      f"https://www.youtube.com/watch?v={vid}"], timeout=45)
+    if getattr(proc, "returncode", 1) != 0 or not proc.stdout.strip():
+        return None
+    try:
+        info = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return None
+    langs = set()
+    for key in ("subtitles", "automatic_captions"):
+        for lang in (info.get(key) or {}):
+            langs.add(lang)
+    ranked = sorted(langs)
+    return ranked[:40] or None
+
+
+def _batch_langs(all_langs_list, batch_size=10):
+    for i in range(0, len(all_langs_list), batch_size):
+        yield all_langs_list[i:i + batch_size]
+
+
 def fetch_subtitle_files(vid, langs, all_langs=False, work_dir=None,
                          retries=int(os.environ.get("YTDLP_RETRIES", "3")),
                          sleep=float(os.environ.get("YTDLP_RETRY_SLEEP", "1.0"))):
@@ -88,6 +160,35 @@ def fetch_subtitle_files(vid, langs, all_langs=False, work_dir=None,
     tmpdir = work_dir if work_dir else tempfile.mkdtemp(prefix="ytdlp_")
     os.makedirs(tmpdir, exist_ok=True)
     if all_langs:
+        # Batch strategy: enumerate what's actually available, then fetch in
+        # small groups so a burst of ~150 auto tracks can't trigger a 429.
+        # Fallback to single `--sub-langs all` only when enumeration fails.
+        enum = _list_subtitle_langs(vid)
+        if enum:
+            import time as _time
+            start = _time.monotonic()
+            budget = float(os.environ.get("ALL_LANGS_BUDGET", "150"))
+            for batch_idx, batch in enumerate(_batch_langs(enum, 10)):
+                elapsed = _time.monotonic() - start
+                if elapsed > budget:
+                    die(f"ALL-LANGS transcript fetch failed for {vid}: budget {budget:g}s exceeded "
+                        f"after {batch_idx} batches (partial results discarded) (explicit failure, no silent downgrade).")
+                batchspec = ",".join(batch) + ".*"
+                remaining = max(10, budget - elapsed)
+                per_timeout = min(60, remaining)
+                proc = _run_batch(tmpdir, vid, batchspec, retries=retries, sleep=sleep, timeout=int(per_timeout))
+                if proc is not None and _is_429(proc):
+                    die(f"ALL-LANGS transcript fetch failed for {vid}: HTTP 429 Too Many Requests "
+                        f"after {retries} retries on batch {batch_idx} ({batchspec}) (explicit failure, no silent downgrade).")
+                if proc is not None and getattr(proc, "returncode", 0) not in (0, None):
+                    err = (proc.stderr or "").strip().splitlines()
+                    die(f"ALL-LANGS batch {batch_idx} failed for {vid} (yt-dlp exit {proc.returncode}): "
+                        f"{err[-1] if err else 'no stderr'} -- refusing partial results.")
+            # Collect everything that qualified across batches (snapshot taken in each _run_batch).
+            files = _collect_files(tmpdir, vid)
+            if not files:
+                die(f"Could not fetch a transcript for {vid}. no subtitle track found in any batch")
+            return files, None
         langspec = "all"
     else:
         langspec = ",".join(langs) + ".*"
@@ -128,6 +229,7 @@ def fetch_subtitle_files(vid, langs, all_langs=False, work_dir=None,
             break
         import time as _time
         _time.sleep(sleep * (2 ** (attempt - 1)))
+    # (legacy single-call path; batched path returns earlier)
     if proc is not None and _is_429(proc):
         die(f"ALL-LANGS transcript fetch failed for {vid}: HTTP 429 Too Many Requests "
             f"after {retries} retries (explicit failure, no silent downgrade). "
