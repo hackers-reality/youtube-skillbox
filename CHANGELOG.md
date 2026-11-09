@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.9] - 2026-11-10
+
+### Fixed
+- **Transcript integrity (critical)**: `gettranscript.py` now rejects stale `.json3` files from other videos sharing `--work-dir` (Earth-spin/Marathi cross-contamination), validates metadata `id` against the requested video, and fails on mismatch instead of returning wrong audio
+- **Vision gate authenticity**: new `vision_gate.py` verifies a REAL known-image probe (`VISION-PROBE-XXXX`) read through the configured model/provider/mechanism; file existence alone never verifies, and `NOT VERIFIED` is the honest default
+- **Hookscore cp1252 crash**: subprocess output decoded explicitly UTF-8/`errors=replace` (fixes observed `0x8f` decode crash), cwd-independent transcript resolution, `--hook`/`--file` compat modes, UTF-16-tolerant input reads
+- **yt-dlp retries**: full retry surface for yt-dlp 2026.10.26 (`--retries 10`, `--extractor-retries 10`, `--retry-sleep` http/extractor, subtitle/request sleeps); `--all-langs` never silently downgrades after 429 exhaustion
+- **`--original-lang`**: detects original spoken language and fetches original + English only (≤2 requests) — avoids the `--all-langs` 150-track 429 burst
+- **Manifest persistence**: `--write` rewrites `manifest.json` with final `artifacts_verified`/`overall_status` so the saved file agrees with the validator
+- **Retention timing**: `--duration` now required for seconds (percent-only without it); correct cliff seconds on the 24 s short (22.8 s, not 95 s)
+- **`ytdata --with-duration` performance**: per-video enrichment is now concurrent (5 workers) with a total budget and explicit `enrichment_status`/`enrichment_error` per entry instead of sequential spawns that timed out at 180 s
+
+### Tests
+- 163 tests (was 133): new integrity/cwd/manifest/vision/retention/enrichment/unicode/retry regressions in `tests/test_workflow_regressions.py`
+
 ## [0.4.8] - 2026-11-04
 
 ### Fixed
