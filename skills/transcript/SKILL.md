@@ -28,18 +28,27 @@ A helper script lives at `scripts/gettranscript.py` (relative to this SKILL.md).
 ### Windows PowerShell (use `;` not `&&`):
 ```powershell
 python scripts/gettranscript.py "<url-or-id>" --format json
-python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
+python scripts/gettranscript.py "<url-or-id>" --format json --original-lang
 python scripts/gettranscript.py "<url-or-id>" --lang mr,en
+python scripts/gettranscript.py "<url-or-id>" --format json --original-lang --work-dir "<artifact-destination>"
 python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
 
 ### Linux/macOS (bash/zsh):
 ```bash
 python scripts/gettranscript.py "<url-or-id>" --format json
-python scripts/gettranscript.py "<url-or-id>" --format json --all-langs
+python scripts/gettranscript.py "<url-or-id>" --format json --original-lang
 python scripts/gettranscript.py "<url-or-id>" --lang mr,en
+python scripts/gettranscript.py "<url-or-id>" --format json --original-lang --work-dir "<artifact-destination>"
 python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-dir "<artifact-destination>"
 ```
+
+### `--original-lang` (preferred) — so the CLI documentation is honest:
+- Detects the original spoken language (preferring a manual `*-orig` track).
+- If original == English, fetches **English only**.
+- Otherwise fetches **original + English** — two requests max.
+- Faster and more reliable than `--all-langs`, which bursts every auto-translated track (~150 langs) and reliably throttles (HTTP 429 on tracks like `ab`).
+- If enumeration/detection fails, exits non-zero — never silently falls back to a single language.
 
 ### Input formats accepted:
 - Full URL: `https://www.youtube.com/watch?v=9NDb3RH9N7M`
@@ -49,7 +58,8 @@ python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-d
 
 ### Critical Syntax Rules:
 - **Use `--json`** for structured output (parsing text is fragile)
-- **Use `--all-langs`** to fetch ALL subtitle tracks (catches non-English originals like Marathi `mr-orig`)
+- **Use `--original-lang`** to fetch the original language + English only (fastest, avoids the `--all-langs` 429 burst)
+- **Use `--all-langs`** only when you explicitly need EVERY subtitle track (manual + auto) — expect 429 throttle on obscure auto tracks like `ab`; failure keeps exit non-zero, never silently downgrades
 - **Windows: use `;` not `&&`** for command chaining in PowerShell
 - **Run from repo root** — script uses relative paths
 
@@ -82,10 +92,12 @@ python scripts/gettranscript.py "<url-or-id>" --format json --all-langs --work-d
 
 `--lang` is a **priority list**, first available wins. Default is `en`. For a Spanish video use `--lang es,es-419,en`. To translate, fetch then translate the text yourself — this tool returns the caption track as-is, it does not machine-translate.
 
-**Multi-language support**: Use `--all-langs` to fetch **every available subtitle track** (manual + auto-generated). Returns a JSON array of transcripts with language metadata. Use this when:
-- Video may have non-English original language (e.g., Marathi `mr-orig`)
-- Auto-translated English is poor quality
+**Original-language default**: Use `--original-lang` to fetch **original + English only**. It detects the original spoken language (manual `*-orig` preferred), never downloads the 150 fake/auto tracks, and never causes a 429 burst. This is what the workflow uses by default.
+
+**Multi-language support**: Use `--all-langs` ONLY when you genuinely need **every available subtitle track** (manual + auto-generated). Returns a JSON array of transcripts with language metadata. Use this when:
+- Video has many distinct legitimate original captions you need (rare)
 - You want to compare translations for accuracy
+- `--original-lang` failed allita or the user explicitly asks for all
 
 `--all-langs` and other CLI flags are always parsed as options, never as video IDs. If an explicitly requested option cannot be satisfied, the script exits non-zero and reports it — it does **not** silently downgrade to a default-language transcript.
 

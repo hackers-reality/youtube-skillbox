@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.11] - 2026-11-10
+
+### Fixed
+- **Transcript SKILL.md documented the wrong default**: examples/flags pushed `--all-langs`; now `--original-lang` is the documented command everywhere (PowerShell + Linux), with `--all-langs` explained as explicit-opt-in and its 429 throttle risk documented.
+
 ## [0.4.10] - 2026-11-10
 
 ### Fixed
