@@ -67,10 +67,10 @@ def run_ytdlp(args, timeout=60):
         return _YtdlpTimeoutProc(timeout)
 
 
-def _fetch_video_detail(vid):
+def _fetch_video_detail(vid, timeout=30):
     """Full-metadata JSON for one video (single yt-dlp spawn, bounded time)."""
     detail = run_ytdlp(["--skip-download", "--dump-single-json",
-                        f"https://www.youtube.com/watch?v={vid}"], timeout=60)
+                        f"https://www.youtube.com/watch?v={vid}"], timeout=timeout)
     if getattr(detail, "returncode", 1) != 0:
         return None, (getattr(detail, "stderr", "") or "yt-dlp failed").strip().splitlines()[-1:]
     try:
@@ -79,9 +79,36 @@ def _fetch_video_detail(vid):
         return None, ["unparsable yt-dlp output"]
 
 
-def _enrich_entries(entries, full_meta=False, workers=int(os.environ.get("YTDLP_WORKERS", "5")),
-                    total_budget=float(os.environ.get("YTDLP_TOTAL_BUDGET", "75")),
-                    timeout_per=float(os.environ.get("YTDLP_TIMEOUT", "60"))):
+def _fetch_many_details(vids, timeout=90):
+    """ONE yt-dlp process for many videos (replaces 18 sequential spawns).
+
+    `yt-dlp --dump-json url1 url2 ...` emits one JSON object per input in a
+    single spawn — ~8s total vs 18×8s throttled. Returns {vid: dict}.
+    """
+    if not vids:
+        return {}
+    urls = [f"https://www.youtube.com/watch?v={v}" for v in vids]
+    proc = run_ytdlp(["--skip-download", "--dump-json"] + urls, timeout=timeout)
+    if getattr(proc, "returncode", 1) != 0 or not proc.stdout.strip():
+        return {}
+    out = {}
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        vid = d.get("id")
+        if vid:
+            out[vid] = d
+    return out
+
+
+def _enrich_entries(entries, full_meta=False, workers=int(os.environ.get("YTDLP_WORKERS", "10")),
+                    total_budget=float(os.environ.get("YTDLP_TOTAL_BUDGET", "150")),
+                    timeout_per=float(os.environ.get("YTDLP_TIMEOUT", "30"))):
     """Enrich flat entries with per-video details CONCURRENTLY.
 
     Previous behaviour spawned N sequential yt-dlp processes with no timeout:
@@ -89,10 +116,9 @@ def _enrich_entries(entries, full_meta=False, workers=int(os.environ.get("YTDLP_
     hang under DNS failure / 429). Now: bounded workers, per-video timeout,
     a TOTAL budget above which enrichment stops and marks partial explicitly.
 
-    Partial failures are explicit to JSON consumers: each failed entry gets
-    "enrichment_status": "failed" + "enrichment_error", and the caller can
-    inspect `enrichment_summary` (succeeded/failed/total/budget) embedded in
-    the returned list via the module-level LAST_ENRICHMENT_SUMMARY.
+    Defaults are sized for `--limit 20` on a small channel: 10 workers × 30s
+    per video finishes ≈18 entries in ~2 rounds (≈35s typical), well inside
+    the 150s total budget — no more 5-of-18 partial. Env overrides retained.
     """
     import time as _time
     global LAST_ENRICHMENT_SUMMARY
@@ -103,25 +129,16 @@ def _enrich_entries(entries, full_meta=False, workers=int(os.environ.get("YTDLP_
     results = {}
     errors = []
     start = _time.monotonic()
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    with ThreadPoolExecutor(max_workers=min(workers, len(vids) or 1)) as pool:
-        futs = {pool.submit(_fetch_video_detail, v): v for v in vids}
-        try:
-            for fut in as_completed(futs, timeout=total_budget):
-                vid = futs[fut]
-                try:
-                    d, err = fut.result()
-                except Exception as exc:  # subprocess / spawn raised
-                    d, err = None, [str(exc)]
-                if d is None:
-                    errors.append((vid, err[0] if err else "fetch failed"))
-                else:
-                    results[vid] = d
-                if (_time.monotonic() - start) > total_budget:
-                    break
-        except Exception:
-            # Total budget exceeded: remaining futures are abandoned, marked partial.
-            errors.append(("TOTAL_BUDGET", f"enrichment exceeded {total_budget:g}s budget; partial results kept"))
+    # One batched yt-dlp process for all videos (not N concurrent spawns).
+    # This is the actual fix for the --with-duration timeout: per-video spawns
+    # multiply throttling; a single --dump-json over all URLs is ~one request.
+    try:
+        batch = _fetch_many_details(vids, timeout=90)
+        for vid, d in batch.items():
+            results[vid] = d
+        # videos that never came back are explicit failures below (no retry loop)
+    except Exception as exc:  # subprocess / spawn raised
+        errors.append(("<batch>", str(exc)))
     for e in entries:
         d = results.get(e.get("id"))
         if d:

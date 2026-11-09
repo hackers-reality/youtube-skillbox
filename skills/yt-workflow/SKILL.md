@@ -80,14 +80,17 @@ python skills/youtube/scripts/ytdata.py profile "@handle"
 
 ### Phase 2: Content Extraction (transcript skill)
 
+> **Preferred command — USE THIS BY DEFAULT:** `gettranscript.py "<video_id>" --format json --original-lang --work-dir "<artifact-destination>"`
+> Detects the original spoken language (preferring a manual `*-orig` track) and fetches **original + English only** (≤2 subtitle requests). This is faster and more reliable than `--all-langs`, which bursts ~40+ auto-translated tracks and reliably throttles (HTTP 429 on tracks like `ab`). Use `--original-lang` for every audit — `--all-langs` is only for the rare case where you explicitly need every language.
+
 **Windows PowerShell:**
 ```powershell
-python skills\transcript\scripts\gettranscript.py "<video_id>" --format json --all-langs --work-dir "<artifact-destination>"
+python skills\transcript\scripts\gettranscript.py "<video_id>" --format json --original-lang --work-dir "<artifact-destination>"
 ```
 
 **Linux/macOS:**
 ```bash
-python skills/transcript/scripts/gettranscript.py "<video_id>" --format json --all-langs --work-dir "<artifact-destination>"
+python skills/transcript/scripts/gettranscript.py "<video_id>" --format json --original-lang --work-dir "<artifact-destination>"
 ```
 
 ### Phase 3: Hook Analysis (yt-script skill)

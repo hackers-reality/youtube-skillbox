@@ -521,18 +521,20 @@ class TestYtdataEnrichmentExplicit(unittest.TestCase):
         self.ytdata = load_module(YTDATA_PATH, "ytdata_explicit_test")
 
     def test_failed_entries_marked_explicitly(self):
-        orig = self.ytdata._fetch_video_detail
-        self.ytdata._fetch_video_detail = lambda v: (None, ["boom"]) if v == "bad00000001" else (
-            {"duration": 42, "duration_string": "0:42"}, [])
+        orig = self.ytdata._fetch_many_details
+        def fake(vids, timeout=None):
+            return {v: {"duration": 42, "duration_string": "0:42"}
+                    for v in vids if v != "bad00000001"}
+        self.ytdata._fetch_many_details = fake
         try:
             entries = [{"id": "a0000000001"}, {"id": "bad00000001"}]
             out = self.ytdata._enrich_entries(entries, full_meta=False, workers=2)
             self.assertEqual(out[0]["enrichment_status"], "succeeded")
             self.assertEqual(out[1]["enrichment_status"], "failed")
-            self.assertIn("boom", out[1].get("enrichment_error", ""))
+            self.assertIsNotNone(out[1].get("enrichment_error"))
             self.assertTrue(self.ytdata.LAST_ENRICHMENT_SUMMARY["partial"])
         finally:
-            self.ytdata._fetch_video_detail = orig
+            self.ytdata._fetch_many_details = orig
 
 
 class TestRetryFlags(unittest.TestCase):
@@ -675,14 +677,12 @@ class TestYtdataEnrichment(unittest.TestCase):
         self.ytdata = load_module(YTDATA_PATH, "ytdata_enrich_test")
 
     def test_enrich_preserves_order_and_degrades_on_failure(self):
-        orig = self.ytdata._fetch_video_detail
-        calls = []
-        def fake(vid):
-            calls.append(vid)
-            if vid == "bad00000001":
-                return None, ["boom"]
-            return {"duration": 42, "duration_string": "0:42"}, []
-        self.ytdata._fetch_video_detail = fake
+        # Enrichment now uses ONE _fetch_many_details batch call (not per-video).
+        orig = self.ytdata._fetch_many_details
+        def fake(vids, timeout=None):
+            return {v: {"duration": 42, "duration_string": "0:42"}
+                    for v in vids if v != "bad00000001"}
+        self.ytdata._fetch_many_details = fake
         try:
             entries = [{"id": "a0000000001"}, {"id": "bad00000001"}, {"id": "b0000000002"}]
             out = self.ytdata._enrich_entries(entries, full_meta=False, workers=3)
@@ -691,7 +691,7 @@ class TestYtdataEnrichment(unittest.TestCase):
             self.assertIsNone(out[1].get("duration"))  # degraded, not fatal
             self.assertEqual(out[2]["duration"], 42)
         finally:
-            self.ytdata._fetch_video_detail = orig
+            self.ytdata._fetch_many_details = orig
 
     def test_run_ytdlp_timeout_returns_nonzero(self):
         import subprocess as sp

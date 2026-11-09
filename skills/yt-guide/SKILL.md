@@ -130,7 +130,9 @@ All skills support `--json` output for machine parsing.
 | Skill | CLI command | Common flags |
 |-------|-------------|-------------|
 | youtube | `ytdata <cmd>` | `--limit`, `--json`, `--gl`, `--hl`, `--full-meta` |
-| transcript | `gettranscript.py <id|url>` | `--format json|txt|srt`, `--all-langs` |
+| transcript | `gettranscript.py <id|url>` | `--format json|txt|srt`, `--original-lang` (preferred), `--all-langs` |
+
+> **Preferred transcript command — use `--original-lang` yourself by default.** It detects the original spoken language (preferring a manual `*-orig` track) and fetches **original + English only** (≤2 requests). This is faster and more reliable than `--all-langs`, which bursts every auto-translated track (~150 langs) and reliably throttles (HTTP 429 on tracks like `ab`). If the original is already English, only English is fetched. Only use `--all-langs` when the user explicitly needs every language.
 | yt-script | `python hookscore.py <file>` | `--json` |
 | yt-package | `python title.py <args>` | `--file`, `--json` |
 | yt-seo | `ytdata scorecard <url>` | `--keyword`, `--json` |
