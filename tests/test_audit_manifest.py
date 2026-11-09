@@ -53,10 +53,20 @@ class TestAuditManifest(unittest.TestCase):
         self.assertIn(("phase2", "failed"), result["required_failures"])
 
     def test_all_pass_strict_complete(self):
-        m = self.manifest.AuditManifest("strict", "@chan")
-        for ph in ["phase1", "phase2", "phase3", "phase4", "phase5", "phase6"]:
-            m.record(ph, self.manifest.PHASE_SKILLS[ph], f"cmd {ph}", exit_code=0)
-        self.assertEqual(m.finalize()["overall"], "COMPLETE")
+        import tempfile
+        dest = tempfile.mkdtemp(prefix="audit_complete_")
+        try:
+            with open(os.path.join(dest, "report.md"), "w", encoding="utf-8") as f:
+                f.write("# r")
+            m = self.manifest.AuditManifest("strict", "@chan", artifact_destination=dest)
+            for ph in ["phase1", "phase2", "phase3", "phase4", "phase5", "phase6"]:
+                m.record(ph, self.manifest.PHASE_SKILLS[ph], f"cmd {ph}", exit_code=0)
+            m.register_artifact(os.path.join(dest, "report.md"), artifact_type="report", producing_phase="manifest")
+            self.assertEqual(m.finalize()["overall"], "COMPLETE")
+        finally:
+            for n in os.listdir(dest):
+                os.unlink(os.path.join(dest, n))
+            os.rmdir(dest)
 
     def test_failed_phase_marked_success_rejected(self):
         m = self.manifest.AuditManifest("strict", "@chan")

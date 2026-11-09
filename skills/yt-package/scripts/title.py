@@ -253,6 +253,10 @@ def score_package(title: str, thumb_text: str = "", keyword: str = "") -> Dict:
         "combined_score": combined,
         "title": title_result,
         "thumbnail": {
+            # Legacy flat fields preserved for consumers/callers (existing tests + dashboards).
+            "score": thumb_result["score"],
+            "checks": thumb_result.get("checks", []),
+            # New explicit split — text is user-supplied heuristic; image is NOT evaluated here.
             "text_score": thumb_result,
             "image_score": None,
         },
@@ -309,9 +313,9 @@ def main():
             for c in result['title']['checks']:
                 status = "✅" if c['passed'] else "❌"
                 print(f"  {status} [{c['weight']}] {c['message']}")
-            if result['thumbnail']['text_score']['score']:
-                print(f"\nThumbnail TEXT Analysis ({result['thumbnail']['text_score']['score']}/100):")
-                for c in result['thumbnail']['text_score']['checks']:
+            if result['thumbnail']['score']:
+                print(f"\nThumbnail TEXT Analysis ({result['thumbnail']['score']}/100):")
+                for c in result['thumbnail']['checks']:
                     status = "✅" if c.get('passed', False) else "❌"
                     print(f"  {status} {c['check']}: {c.get('score', 0)}pts")
                 print("Image evaluation: NOT EVALUATED")

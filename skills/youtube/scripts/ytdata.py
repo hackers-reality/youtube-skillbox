@@ -79,55 +79,87 @@ def _fetch_video_detail(vid):
         return None, ["unparsable yt-dlp output"]
 
 
-def _enrich_entries(entries, full_meta=False, workers=int(os.environ.get("YTDLP_WORKERS", "5"))):
+def _enrich_entries(entries, full_meta=False, workers=int(os.environ.get("YTDLP_WORKERS", "5")),
+                    total_budget=float(os.environ.get("YTDLP_TOTAL_BUDGET", "75")),
+                    timeout_per=float(os.environ.get("YTDLP_TIMEOUT", "60"))):
     """Enrich flat entries with per-video details CONCURRENTLY.
 
     Previous behaviour spawned N sequential yt-dlp processes with no timeout:
     20 videos x ~8s sequential = the observed 180s timeout (and an unbounded
-    hang under DNS failure / 429). Now: bounded workers, 60s each, order
-    preserved, failures degrade to flat fields with a stderr warning instead
-    of aborting the whole list. --with-duration must never hang.
+    hang under DNS failure / 429). Now: bounded workers, per-video timeout,
+    a TOTAL budget above which enrichment stops and marks partial explicitly.
+
+    Partial failures are explicit to JSON consumers: each failed entry gets
+    "enrichment_status": "failed" + "enrichment_error", and the caller can
+    inspect `enrichment_summary` (succeeded/failed/total/budget) embedded in
+    the returned list via the module-level LAST_ENRICHMENT_SUMMARY.
     """
+    import time as _time
+    global LAST_ENRICHMENT_SUMMARY
     vids = [e.get("id") for e in entries if e.get("id")]
     if not vids:
+        LAST_ENRICHMENT_SUMMARY = {"succeeded": 0, "failed": 0, "total": 0, "budget_s": total_budget}
         return entries
     results = {}
     errors = []
+    start = _time.monotonic()
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(max_workers=min(workers, len(vids) or 1)) as pool:
         futs = {pool.submit(_fetch_video_detail, v): v for v in vids}
-        for fut in as_completed(futs):
-            vid = futs[fut]
-            try:
-                d, err = fut.result()
-            except Exception as exc:  # subprocess / spawn raised
-                d, err = None, [str(exc)]
-            if d is None:
-                errors.append(f"{vid}: {err[0] if err else 'fetch failed'}")
-            else:
-                results[vid] = d
+        try:
+            for fut in as_completed(futs, timeout=total_budget):
+                vid = futs[fut]
+                try:
+                    d, err = fut.result()
+                except Exception as exc:  # subprocess / spawn raised
+                    d, err = None, [str(exc)]
+                if d is None:
+                    errors.append((vid, err[0] if err else "fetch failed"))
+                else:
+                    results[vid] = d
+                if (_time.monotonic() - start) > total_budget:
+                    break
+        except Exception:
+            # Total budget exceeded: remaining futures are abandoned, marked partial.
+            errors.append(("TOTAL_BUDGET", f"enrichment exceeded {total_budget:g}s budget; partial results kept"))
     for e in entries:
         d = results.get(e.get("id"))
-        if not d:
-            continue
-        e["duration"] = d.get("duration") or e.get("duration")
-        e["duration_string"] = d.get("duration_string") or e.get("duration_string")
-        if full_meta:
-            e.update({
-                "upload_date": d.get("upload_date"),
-                "live_status": d.get("live_status"),
-                "tags": d.get("tags"),
-                "likes": d.get("like_count"),
-                "subscribers": d.get("channel_follower_count"),
-                "categories": d.get("categories"),
-                "description": (d.get("description") or "")[:500] or None,
-                "channel_url": d.get("channel_url") or d.get("uploader_url"),
-                "channel_is_verified": d.get("channel_is_verified"),
-                "age_days": _parse_age_from_date(d.get("upload_date")),
-            })
-    for err in errors:
-        print(f"WARNING: duration enrichment failed ({err}); keeping flat fields", file=sys.stderr)
+        if d:
+            e["enrichment_status"] = "succeeded"
+            e["duration"] = d.get("duration") or e.get("duration")
+            e["duration_string"] = d.get("duration_string") or e.get("duration_string")
+            if full_meta:
+                e.update({
+                    "upload_date": d.get("upload_date"),
+                    "live_status": d.get("live_status"),
+                    "tags": d.get("tags"),
+                    "likes": d.get("like_count"),
+                    "subscribers": d.get("channel_follower_count"),
+                    "categories": d.get("categories"),
+                    "description": (d.get("description") or "")[:500] or None,
+                    "channel_url": d.get("channel_url") or d.get("uploader_url"),
+                    "channel_is_verified": d.get("channel_is_verified"),
+                    "age_days": _parse_age_from_date(d.get("upload_date")),
+                })
+        else:
+            # Explicit partial-failure marker for JSON consumers (was stderr-only).
+            e["enrichment_status"] = "failed"
+            err_map = dict(errors)
+            e["enrichment_error"] = err_map.get(e.get("id"), "not attempted or budget exceeded")
+    for vid, msg in errors:
+        print(f"WARNING: duration enrichment failed ({vid}: {msg}); keeping flat fields", file=sys.stderr)
+    LAST_ENRICHMENT_SUMMARY = {
+        "succeeded": len(results),
+        "failed": len(errors) if errors and errors[0][0] == "TOTAL_BUDGET" else len([e for e in entries if e.get("enrichment_status") == "failed"]),
+        "total": len(vids),
+        "budget_s": total_budget,
+        "partial": any(e.get("enrichment_status") == "failed" for e in entries),
+        "errors": [f"{v}: {m}" for v, m in errors],
+    }
     return entries
+
+
+LAST_ENRICHMENT_SUMMARY = {"succeeded": 0, "failed": 0, "total": 0, "budget_s": 75}
 
 
 # ---- Community posts via raw Innertube page scrape (no yt-dlp; it can't do this) ----
@@ -636,6 +668,9 @@ def slim(e):
         "upload_date": e.get("upload_date") or e.get("timestamp"),
         "live_status": e.get("live_status"),
         "age_days": e.get("age_days"),
+        "enrichment_status": e.get("enrichment_status"),
+        "enrichment_error": e.get("enrichment_error"),
+        "enrichment_summary": globals().get("LAST_ENRICHMENT_SUMMARY"),
     }
 
 

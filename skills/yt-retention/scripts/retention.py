@@ -151,10 +151,13 @@ def parse_retention_csv(csv_path: str, video_duration_seconds: float = None) -> 
     rows = []
     with open(csv_path, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
+        source_filename = os.path.basename(str(csv_path))
         for row in reader:
             # Normalize keys
             row = {k.strip().lower().replace(' ', '_').replace('%', 'pct').replace('(', '').replace(')', ''): v for k, v in row.items()}
             rows.append(row)
+    # Annotate every point with the source filename so absolute semantics can
+    # come from the export type (All.csv = absolute), not just value range.
     
     if not rows:
         return {"error": "No data rows found"}
@@ -236,6 +239,8 @@ def parse_retention_csv(csv_path: str, video_duration_seconds: float = None) -> 
                 "time_pct": pct,
                 "retention_pct": retention,
                 "original_time_is_pct": original_time_is_pct,
+                "source_file": source_filename,
+                "absolute_retention_expected": _is_absolute_from_export(source_filename),
             })
         except (ValueError, KeyError):
             continue
@@ -271,8 +276,20 @@ def parse_time_to_seconds(time_str: str) -> float:
 
 
 def _is_absolute_retention(points: List[Dict]) -> bool:
-    """Absolute audience retention can exceed 100% (loops/replays). Relative retention never does."""
+    """Absolute audience retention can exceed 100% (loops/replays). Relative retention never does.
+
+    Semantics come from the SOURCE COLUMN / export type (All.csv measures
+    absolute audience retention), NOT from whether any value happens to tip
+    above 100%. A segmented/relative export that never exceeds 100% is
+    relative; an absolute export with all values <100% is still absolute.
+    The caller may pass source metadata via `source_kind`."""
     return any(p.get("retention_pct", 0) > 100 for p in points)
+
+
+def _is_absolute_from_export(filename: str) -> bool:
+    """Known absolute exports: All.csv measures absolute retention per the
+    Studio export contract (see _KNOWN_EXPORTS)."""
+    return _KNOWN_EXPORTS.get(filename, {}).get("measures") == "retention_curve_absolute"
 
 
 def detect_hook_leak(points: List[Dict]) -> Dict:
@@ -314,7 +331,7 @@ def detect_hook_leak(points: List[Dict]) -> Dict:
     min_early = min(p["retention_pct"] for p in early_points)
     leak = start_retention - min_early
 
-    absolute = _is_absolute_retention(early_points)
+    absolute = _is_absolute_retention(points) or _is_absolute_from_export(getattr(points[0], "get", lambda *a: None)("source_file", "") or "")
     severity = "n/a (absolute retention)" if absolute else (
         "healthy" if leak < 25 else "moderate" if leak < 40 else "severe")
 
@@ -375,7 +392,7 @@ def detect_slide(points: List[Dict], window: int = 30) -> Dict:
                 "details": "Slide per minute needs --duration to convert % axis to seconds; passing --duration <seconds> from the video metadata unlocks it."}
     
     avg_slide = sum(slopes) / len(slopes)
-    absolute = _is_absolute_retention(points)
+    absolute = _is_absolute_retention(points) or _is_absolute_from_export((points[0].get("source_file") or "") if points else "")
     severity = "n/a (absolute retention)" if absolute else (
         "healthy" if avg_slide < 1 else "moderate" if avg_slide < 3 else "severe")
 

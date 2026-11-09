@@ -125,13 +125,21 @@ class TestInventoryAndThumbnailContract(unittest.TestCase):
         try:
             image = os.path.join(dest, "thumbnail.jpg")
             with open(image, "wb") as f:
-                f.write(b"not-a-real-image-but-bytes")
+                f.write(b"\xff\xd8\xff" + b"fake-jpeg-bytes")
             phase_artifact = os.path.join(dest, "titles.json")
             with open(phase_artifact, "w", encoding="utf-8") as f:
                 f.write("[]")
+            ev = os.path.join(dest, "truth.json")
+            with open(ev, "w", encoding="utf-8") as f:
+                f.write("{}")
             m = self.manifest.AuditManifest("strict", "@c", artifact_destination=dest)
             m.record("phase4", "yt-package", "title.py", exit_code=0, artifact=phase_artifact)
+            m.record_vision_gate("verified", model="m", provider="p", mechanism="read",
+                                 evidence_path=ev, thumbnail_files=[image],
+                                 probe="VISION-PROBE-A", observed="VISION-PROBE-A")
             m.set_thumbnail_analysis("phase4", True, "image_artifact", image_artifact_path=image)
+            m.register_artifact(image, artifact_type="thumbnail_image", producing_phase="phase4")
+            m.register_artifact(ev, artifact_type="report", producing_phase="phase4")
             rec = m.phases["phase4"]
             self.assertTrue(rec["thumbnail_evaluated"])
             self.assertEqual(rec["thumbnail_basis"], "image_artifact")
@@ -313,6 +321,21 @@ class TestVisionProbe(unittest.TestCase):
             self.assertTrue(os.path.exists(p) and os.path.getsize(p) > 0)
             self.assertIsNotNone(self.vg.image_type(__import__("pathlib").Path(p)))
 
+    def test_fallback_without_pillow_generates_valid_png(self):
+        """Simulate Pillow unavailable: fallback must still yield a recognized image."""
+        import builtins
+        real_import = builtins.__import__
+        def fake_import(name, *a, **k):
+            if name.startswith("PIL"):
+                raise ImportError("No module named 'PIL' (simulated)")
+            return real_import(name, *a, **k)
+        with tempfile.TemporaryDirectory(prefix="vg_nopil_") as d:
+            p = __import__("pathlib").Path(d) / "probe.png"
+            with unittest.mock.patch("builtins.__import__", side_effect=fake_import):
+                self.vg.make_known_image(p, "VISION-PROBE-NOPIL")
+            self.assertTrue(p.exists())
+            self.assertEqual(self.vg.image_type(p), "png")
+
     def test_wrong_observation_rejected_right_observation_accepted(self):
         with tempfile.TemporaryDirectory(prefix="vg_probe_") as d:
             probe = "VISION-PROBE-ABC123"
@@ -351,6 +374,167 @@ class TestVisionProbe(unittest.TestCase):
             os.rmdir(dest)
 
 
+class TestManifestHardening(unittest.TestCase):
+    def setUp(self):
+        self.manifest = load_module(MANIFEST_PATH, "audit_manifest_harden_test")
+
+    def test_overwrite_false_raises(self):
+        with tempfile.TemporaryDirectory(prefix="mh_ow_") as d:
+            p = os.path.join(d, "manifest.json")
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("{}")
+            m = self.manifest.AuditManifest("strict", "@c", artifact_destination=d)
+            with self.assertRaises(FileExistsError):
+                m.write_manifest(p, overwrite=False)
+
+    def test_verified_gate_requires_probe_and_observed(self):
+        with tempfile.TemporaryDirectory(prefix="mh_vg_") as d:
+            img = os.path.join(d, "thumb.jpg")
+            with open(img, "wb") as f:
+                f.write(b"\xff\xd8\xff fake")
+            ev = os.path.join(d, "truth.json")
+            with open(ev, "w", encoding="utf-8") as f:
+                f.write("{}")
+            m = self.manifest.AuditManifest("strict", "@c", artifact_destination=d)
+            m.register_artifact(img, artifact_type="thumbnail_image", producing_phase="phase4")
+            m.register_artifact(ev, artifact_type="report", producing_phase="phase4")
+            with self.assertRaises(ValueError):
+                m.record_vision_gate("verified", model="m", provider="p", mechanism="read",
+                                     evidence_path=ev, thumbnail_files=[img])  # no probe/observed
+
+    def test_thumbnail_true_requires_verified_gate(self):
+        with tempfile.TemporaryDirectory(prefix="mh_th_") as d:
+            img = os.path.join(d, "thumb.jpg")
+            with open(img, "wb") as f:
+                f.write(b"\xff\xd8\xff fake")
+            m = self.manifest.AuditManifest("strict", "@c", artifact_destination=d)
+            m.record("phase4", "yt-package", "title.py", exit_code=0, artifact=os.path.join(d, "t.json"))
+            with open(os.path.join(d, "t.json"), "w", encoding="utf-8") as f:
+                f.write("[]")
+            with self.assertRaises(ValueError):
+                m.set_thumbnail_analysis("phase4", True, "image_artifact", image_artifact_path=img)
+
+    def test_thumbnail_true_checks_real_image_bytes(self):
+        with tempfile.TemporaryDirectory(prefix="mh_bytes_") as d:
+            fake = os.path.join(d, "thumb.jpg")
+            with open(fake, "wb") as f:
+                f.write(b"not an image at all")
+            good = os.path.join(d, "good.jpg")
+            with open(good, "wb") as f:
+                f.write(b"\xff\xd8\xff real-ish")
+            ev = os.path.join(d, "truth.json")
+            with open(ev, "w", encoding="utf-8") as f:
+                f.write("{}")
+            m = self.manifest.AuditManifest("strict", "@c", artifact_destination=d)
+            m.record("phase4", "yt-package", "title.py", exit_code=0)
+            m.record_vision_gate("verified", model="m", provider="p", mechanism="read",
+                                 evidence_path=ev, thumbnail_files=[good],
+                                 probe="P-OK", observed="P-OK")
+
+            # Fake image content (not an image) must reject thumbnail evaluation.
+            with self.assertRaises(ValueError):
+                m.set_thumbnail_analysis("phase4", True, "image_artifact", image_artifact_path=fake)
+
+    def test_finalize_never_complete_when_verification_fails(self):
+        with tempfile.TemporaryDirectory(prefix="mh_complete_") as d:
+            claimed = os.path.join(d, "claimed.json")
+            with open(claimed, "w", encoding="utf-8") as f:
+                f.write("{}")
+            m = self.manifest.AuditManifest("partial", "@c", artifact_destination=d)
+            for i, ph in enumerate(["phase1", "phase2", "phase3", "phase4", "phase5", "phase6"], 1):
+                skill = {"phase1": "youtube", "phase2": "transcript", "phase3": "yt-script",
+                         "phase4": "yt-package", "phase5": "youtube", "phase6": "youtube"}[ph]
+                m.record(ph, skill, f"cmd{i}", exit_code=0)
+            m.register_artifact(claimed, artifact_type="extracted_data", producing_phase="phase1")
+            # Stray file makes verification fail
+            with open(os.path.join(d, "stray.json"), "w", encoding="utf-8") as f:
+                f.write("{}")
+            result = m.finalize()
+            self.assertNotEqual(result["overall"], "COMPLETE")
+
+    def test_record_rejects_success_without_exit_code(self):
+        m = self.manifest.AuditManifest("strict", "@c")
+        with self.assertRaises(ValueError):
+            m.record("phase1", "youtube", "cmd", exit_code=None, status="success")
+
+
+class TestTitleSchemaCompatibility(unittest.TestCase):
+    def test_thumbnail_keeps_legacy_score_and_checks(self):
+        title_path = os.path.join(REPO, "skills", "yt-package", "scripts", "title.py")
+        mod = load_module(title_path, "title_compat_test")
+        result = mod.score_package("How to YouTube SEO", "WATCH NOW", "youtube seo")
+        thumb = result["thumbnail"]
+        self.assertIn("score", thumb)
+        self.assertIn("checks", thumb)
+        self.assertIn("text_score", thumb)
+        self.assertIsNone(thumb["image_score"])
+        self.assertEqual(thumb["score"], thumb["text_score"]["score"])
+        self.assertEqual(thumb["checks"], thumb["text_score"]["checks"])
+        self.assertFalse(result["thumbnail_evaluated"])
+
+
+class TestTranscriptPrecision(unittest.TestCase):
+    def setUp(self):
+        self.transcript = load_module(TRANSCRIPT_PATH, "gettranscript_precision_test")
+
+    def test_is_429_precise(self):
+        class P:
+            def __init__(self, s):
+                self.stderr = s
+        self.assertTrue(self.transcript._is_429(P("HTTP Error 429: Too Many Requests")))
+        self.assertTrue(self.transcript._is_429(P("rate-limited: wait")))
+        self.assertFalse(self.transcript._is_429(P("rate of speed is fine")))
+        self.assertFalse(self.transcript._is_429(P("operated successfully")))
+
+    def test_nonzero_exit_never_partial_success(self):
+        orig = self.transcript.run_ytdlp
+        class ProcFail:
+            returncode = 1
+            stdout = ""
+            stderr = "ERROR: private video"
+        self.transcript.run_ytdlp = lambda args, timeout=120: ProcFail()
+        try:
+            with tempfile.TemporaryDirectory(prefix="gt_nz_") as d:
+                with self.assertRaises(SystemExit) as cm:
+                    self.transcript.fetch_subtitle_files("9NDb3RH9N7M", ["en"],
+                                                  all_langs=True, work_dir=d, retries=1, sleep=0.001)
+                self.assertNotEqual(cm.exception.code, 0)
+        finally:
+            self.transcript.run_ytdlp = orig
+
+
+class TestRetentionAbsoluteSemantics(unittest.TestCase):
+    def setUp(self):
+        self.retention = load_module(RETENTION_PATH, "retention_semantics_test")
+
+    def test_absolute_from_export_even_below_100(self):
+        pts = [{"time_seconds": None, "time_pct": 0.0, "retention_pct": 50.0,
+                "original_time_is_pct": True, "source_file": "All.csv"}]
+        self.assertTrue(self.retention._is_absolute_from_export("All.csv"))
+        self.assertIsNone(None)
+        hook = self.retention.detect_hook_leak(pts)
+        self.assertTrue(hook["absolute_retention"])
+
+
+class TestYtdataEnrichmentExplicit(unittest.TestCase):
+    def setUp(self):
+        self.ytdata = load_module(YTDATA_PATH, "ytdata_explicit_test")
+
+    def test_failed_entries_marked_explicitly(self):
+        orig = self.ytdata._fetch_video_detail
+        self.ytdata._fetch_video_detail = lambda v: (None, ["boom"]) if v == "bad00000001" else (
+            {"duration": 42, "duration_string": "0:42"}, [])
+        try:
+            entries = [{"id": "a0000000001"}, {"id": "bad00000001"}]
+            out = self.ytdata._enrich_entries(entries, full_meta=False, workers=2)
+            self.assertEqual(out[0]["enrichment_status"], "succeeded")
+            self.assertEqual(out[1]["enrichment_status"], "failed")
+            self.assertIn("boom", out[1].get("enrichment_error", ""))
+            self.assertTrue(self.ytdata.LAST_ENRICHMENT_SUMMARY["partial"])
+        finally:
+            self.ytdata._fetch_video_detail = orig
+
+
 class TestRetryFlags(unittest.TestCase):
     """yt-dlp 2026.10.26 retry surface: --retries (HTTP, default 10),
     --extractor-retries (default 3), --retry-sleep (http/extractor...).
@@ -361,12 +545,12 @@ class TestRetryFlags(unittest.TestCase):
         import pathlib
         src = pathlib.Path(TRANSCRIPT_PATH).read_text(encoding="utf-8")
         self.assertIn('"--retries", "10"', src)
-        self.assertIn('"--extractor-retries", "5"', src)
+        self.assertIn('"--extractor-retries", "10"', src)
         self.assertIn('"--retry-sleep"', src)
-        self.assertIn('"http:linear=1::2"', src)
-        self.assertIn('"extractor:exp=1:30"', src)
-        self.assertIn('"--sleep-subtitles"', src)
-        self.assertIn('"--sleep-requests"', src)
+        self.assertIn('"http:linear=2::5"', src)
+        self.assertIn('"extractor:exp=2:60"', src)
+        self.assertIn('"--sleep-subtitles", "2"', src)
+        self.assertIn('"--sleep-requests", "1.5"', src)
 
     def test_all_langs_never_falls_back_after_429(self):
         transcript = load_module(TRANSCRIPT_PATH, "gettranscript_429_test")
@@ -433,7 +617,8 @@ class TestManifestPersistenceAndVisionGate(unittest.TestCase):
             m.register_artifact(img, artifact_type="thumbnail_image", producing_phase="phase4")
             m.register_artifact(ev, artifact_type="report", producing_phase="phase4")
             rec = m.record_vision_gate("verified", model="m", provider="p", mechanism="read",
-                                       evidence_path=ev, thumbnail_files=[img])
+                                       evidence_path=ev, thumbnail_files=[img],
+                                       probe="VISION-PROBE-A", observed="VISION-PROBE-A")
             self.assertEqual(rec["status"], "verified")
         finally:
             for n in os.listdir(dest):

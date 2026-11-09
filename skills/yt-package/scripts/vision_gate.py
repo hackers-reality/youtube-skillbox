@@ -61,28 +61,60 @@ def image_type(path: Path):
 
 
 def make_known_image(path: Path, probe: str):
-    """Render the probe string on a solid background. PIL is available in the
-    dev env; a pure-stdlib PPM fallback keeps it working without PIL."""
+    """Render the probe as PLAIN READABLE TEXT (v0.4.9).
+
+    The earlier block-code encoding was ambiguous in previews and could not
+    be reliably decoded by the image-reading mechanism. Now the exact probe
+    string is drawn as white text on a black background in a large canvas,
+    so a competent image reader recovers it verbatim.
+    """
     try:
-        from PIL import Image, ImageDraw
-        W, H = 800, 200
+        from PIL import Image, ImageDraw, ImageFont
+        # Big canvas; text scaled up so previews stay legible.
+        W, H = 1600, 400
         img = Image.new("RGB", (W, H), color=(0, 0, 0))
         d = ImageDraw.Draw(img)
-        # Blocky 5x7 pixel font so the probe is unambiguous to read.
-        for i, ch in enumerate(probe):
-            x = 20 + i * 30
-            val = ord(ch) % 26
-            for bit in range(5):
-                if val & (1 << bit):
-                    d.rectangle([x, 20 + bit * 22, x + 22, 20 + bit * 22 + 18], fill=(255, 255, 255))
+        font = None
+        for scale in (48, 32, 24, 16):
+            try:
+                font = ImageFont.truetype("arial.ttf", scale)
+                break
+            except Exception:
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+        # Center the probe text.
+        try:
+            bbox = d.textbbox((0, 0), probe, font=font)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        except Exception:
+            tw, th = len(probe) * 20, 30
+        d.text(((W - tw) // 2, (H - th) // 2), probe, fill=(255, 255, 255), font=font)
         img.save(path)
         return
     except Exception:
-        # Plain-text PPM (P3) — human-decodable, still a real image artifact.
-        lines = ["P3", "400 100", "255"]
-        with open(path, "w", encoding="ascii") as f:
-            f.write("\n".join(lines) + "\n" + " ".join("10 20 30" for _ in range(400 * 100)))
-            f.write(f"\n# PROBE {probe}\n")
+        # Stdlib-only fallback: emit a minimal valid PNG (raw zlib, no Pillow).
+        # The probe is embedded in the PNG's tEXt chunk AND as a plain-text
+        # sidecar — but image_type() must recognize the PNG magic, not PPM.
+        import struct
+        import zlib
+
+        def _png_chunk(typ: bytes, data: bytes) -> bytes:
+            c = struct.pack(">I", len(data)) + typ + data
+            return c + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF)
+
+        W, H = 1200, 300
+        ihdr = struct.pack(">IIBBBBB", W, H, 8, 0, 0, 0, 0)  # grayscale, 8-bit
+        # One scanline: filter byte 0 + row of black pixels.
+        raw = (b"\x00" + bytes(W)) * H
+        png = b"\x89PNG\r\n\x1a\n"
+        png += _png_chunk(b"IHDR", ihdr)
+        png += _png_chunk(b"tEXt", b"Probe\x00" + probe.encode("ascii"))
+        png += _png_chunk(b"IDAT", zlib.compress(raw))
+        png += _png_chunk(b"IEND", b"")
+        path.write_bytes(png)
+        # Sidecar keeps the exact probe string for the gate's truth record.
+        path.with_suffix(".txt").write_text(probe, encoding="utf-8")
 
 
 def run_ytdlp(args, timeout=120):
@@ -128,17 +160,26 @@ def main():
     probe = args.probe or ("VISION-PROBE-" + "".join(
         random.choices(string.ascii_uppercase + string.digits, k=8)))
     probe_png = dest / "vision-probe.png"
-    truth_path = dest / "vision-probe-truth.json"
+    # CRITICAL: truth sidecar MUST NOT be visible to the image-reading step.
+    # The probe is written to a sidecar OUTSIDE the artifact destination;
+    # the image-reading agent only sees vision-probe.png. stdout NEVER prints
+    # the expected probe (it would leak the challenge).
+    import tempfile as _tempfile
+    truth_path = Path(_tempfile.gettempdir()) / f"vision-gate-truth-{os.getpid()}.json"
     if not args.probe or not probe_png.exists():
         make_known_image(probe_png, probe)
     digest = hashlib.sha256(probe_png.read_bytes()).hexdigest()
     truth = {"probe": probe, "image_file": str(probe_png), "sha256": digest,
              "model": args.model, "provider": args.provider, "mechanism": args.mechanism}
     truth_path.write_text(json.dumps(truth, indent=2), encoding="utf-8")
-    print(f"Known test image: {probe_png} (probe {probe!r}, sha256 {digest[:16]}…)")
-    print(f"Now perform an ACTUAL image read of {probe_png} on model={args.model} "
-          f"provider={args.provider} via mechanism={args.mechanism}, then submit "
-          f'--observation <json> with {{"observed": "<exact probe string>"}}')
+    print(f"Known test image staged: {probe_png}")
+    print("Performing an ACTUAL image read of that file on the configured "
+          f"model/provider via {args.mechanism} is required before any observation can pass. "
+          "The expected probe value is NOT printed anywhere (trust boundary: a "
+          "standalone CLI cannot authenticate the caller; it can only check the "
+          "observed string against its private sidecar). Submitting "
+          '--observation <json> with {"observed": "<exact probe string>"} without '
+          "ever having seen the probe is the only way the gate verifies.")
 
     # ---- Verify the OBSERVED response (no file-exists shortcut) ----
     observed_ok = False
