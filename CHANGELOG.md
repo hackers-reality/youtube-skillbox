@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.10] - 2026-11-10
+
+### Fixed
+- **Batched yt-dlp enrichment**: `_enrich_entries` now uses ONE `--dump-json` spawn for all videos (not N per-video spawns). `ytdata channel --limit 20 --with-duration` enriches **18/18** instead of 5/18 partial or 0/18 timeout
+- **Workflow/guide prefer `--original-lang`**: `yt-workflow` Phase 2 now runs `--format json --original-lang` by default; `yt-guide` documents it as the fastest reliable transcript path (original + English, ≤2 requests)
+- **Hookscore UTF-16 + compat**: `_read_text_tolerant` handles UTF-8/16LE/BE BOM; `--hook`/`--file` modes restore the installed CLI shape
+
 ## [0.4.9] - 2026-11-10
 
 ### Fixed
