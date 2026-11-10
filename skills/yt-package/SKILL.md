@@ -28,7 +28,11 @@ thumbnail repeats the title, and half the click surface says the same thing twic
 ```bash
 python3 title.py --title "..." --thumb "AI RAN IT"
 python3 title.py titles.txt            # one per line, ranked
+python3 scripts/preview.py "What if the sun went out for 24 hours?" --thumb "24 HOURS"
+python3 scripts/preview.py "Title" --html preview.html   # search/suggested/Shorts rendering
 ```
+
+`preview.py` renders the title exactly as it truncates on desktop search, mobile search/suggested and the Shorts shelf, flags the clips, and can drop a self-contained HTML file you can open in a browser. **It proves text behavior only — no thumbnail is rendered, no CTR claim is made.**
 
 ## Before you write
 
@@ -41,7 +45,6 @@ python3 title.py titles.txt            # one per line, ranked
    one, ask for it or write the line without it.
 
 ## Honesty rules (non-negotiable)
-
 - **Thumbnail text is not the thumbnail image.** `title.py` scores *text only*. You may never claim to have "checked the contrast", "seen the face", "evaluated the actual thumbnail", or to have derived anything from the pixels when only text was supplied. If no thumbnail image was provided, say **"thumbnail not evaluated — text only"** and score only the text.
 - **Scores are heuristics, not forecasts.** A 47/100 title score is a signal about the title text, not a prediction of CTR, ranking, impressions or views. Never write "this will get X% CTR" or "YouTube will rank this".
 - **Never present a heuristic as an outcome.** Say "heuristic score: 47/100 (title text only)" or "thumbnail not evaluated".

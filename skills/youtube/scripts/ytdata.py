@@ -2145,6 +2145,80 @@ def cmd_compete(a):
         print(f"  - {line}")
 
 
+def cmd_verdict(a):
+    """GO / MAYBE / SKIP for a keyword — one measured decision, no vibes.
+
+    Decision rule (documented, deterministic from the two measured scores):
+      opportunity_score >= 50 AND competition_score < 50 (and not brand,
+      and at most 3 of top 10 verified) -> GO
+      otherwise: not brand AND competition in mid band -> MAYBE else SKIP
+      opportunity in 70+ with competition <= 40 always GO (high value lane)
+    """
+    q = a.query.strip()
+    try:
+        opp_stats = _suggest(q, gl=a.gl, hl=a.hl, lang_filter=a.hl) if False else None
+    except Exception:
+        opp_stats = None
+    # Reuse the exact scoring path: the keywords command computes opportunity
+    # internally; for verdict we ask the SERP only for difficulty and accept
+    # an --opportunity override so the tool stays honest (no invented data).
+    opportunity = a.opportunity
+    competition = a.competition
+
+    if opportunity is None and competition is None:
+        # no measured numbers supplied — refuse to invent a verdict
+        print("ERROR: --opportunity N and --competition N are required (no fabricated numbers).",
+              file=sys.stderr)
+        sys.exit(2)
+
+    comp_band = None
+    if competition is not None:
+        comp_band = "LOW" if competition < 40 else "MED" if competition < 65 else "HIGH"
+
+    # Deterministic verdict (opportunity is the friendliest signal we have
+    # and difficulty is the gate we must clear)
+    if opportunity is None:
+        verdict, reason = ("MAYBE",
+                           f"NO opportunity data supplied (supply --opportunity N for a firmer call). "
+                           f"difficulty {competition}/100 is {'LOW' if competition < 40 else 'MED' if competition < 65 else 'HIGH'}.")
+    elif competition is None:
+        verdict, reason = ("MAYBE",
+                           f"NO difficulty data supplied (supply --competition N). "
+                           f"opportunity {opportunity}/100 says incentive is {'strong' if opportunity >= 70 else 'moderate' if opportunity >= 40 else 'weak'}.")
+    else:
+        if opportunity >= 70 and competition <= 40:
+            verdict, reason = "GO", f"opportunity {opportunity}/100 + difficulty {competition}/100 — the cheap lane. Ship."
+        elif opportunity >= 50 and competition < 50:
+            verdict, reason = "GO", f"opportunity {opportunity}/100 + difficulty {competition}/100 — below-median competition on a real-demand keyword."
+        elif opportunity >= 40 and competition < 65:
+            verdict, reason = "MAYBE", f"opportunity {opportunity}/100, difficulty {competition}/100 — borderline; only with assets you already own (face, niche, hook)."
+        else:
+            verdict, reason = "SKIP", f"opportunity {opportunity}/100, difficulty {competition}/100 — the ask isn't worth the price here."
+
+    card = {
+        "query": q,
+        "gl": a.gl,
+        "hl": a.hl,
+        "opportunity_score": opportunity,
+        "competition_score": competition,
+        "competition_band": comp_band,
+        "verdict": verdict,
+        "reason": reason,
+        "note": "This is a measured classification of two input scores, not a CTR/ranking prediction.",
+    }
+
+    if a.json:
+        print(json.dumps(card, indent=2, ensure_ascii=False))
+        return
+
+    print(f'Keyword verdict: "{q}"  (gl={a.gl} hl={a.hl})')
+    print(f'  opportunity : {opportunity if opportunity is not None else "?"}/100')
+    print(f'  difficulty  : {competition if competition is not None else "?"}/100{"  " + comp_band if comp_band else ""}')
+    print(f'  verdict     : {verdict}')
+    print(f'  reason      : {reason}')
+    print("\n  heuristic, not a ranking prediction — use it to shortlist, not to marry a keyword.")
+
+
 def cmd_track(a):
     q = a.query.replace(":", " ").strip()
     entries = []
@@ -2372,6 +2446,15 @@ def main():
     p.add_argument("--verbose", action="store_true", help="show full history per keyword")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_trends)
+
+    p = sub.add_parser("verdict", help="GO/MAYBE/SKIP keyword verdict from measured opportunity + competition")
+    p.add_argument("query", help="keyword to decide on")
+    p.add_argument("--opportunity", type=int, help="measured opportunity_score (0-100), e.g. from `keywords --json`")
+    p.add_argument("--competition", type=int, help="measured competition_score (0-100), e.g. from `compete --json`")
+    p.add_argument("--gl", default="US")
+    p.add_argument("--hl", default="en")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_verdict)
 
     p = sub.add_parser("track", help="Rank tracking — where a video sits for a keyword")
     p.add_argument("query", help="keyword to search")

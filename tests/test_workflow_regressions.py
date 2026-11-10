@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for the fresh-agent acceptance fixes."""
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -704,6 +705,90 @@ class TestYtdataEnrichment(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0)
         finally:
             sp.run = orig
+
+
+class TestNewFeatureTools(unittest.TestCase):
+    """The free, self-built features — deterministic outputs, no network."""
+
+    def setUp(self):
+        self.match_path = os.path.join(REPO, "skills", "yt-script", "scripts", "match.py")
+        self.preview_path = os.path.join(REPO, "skills", "yt-package", "scripts", "preview.py")
+        self.ytdata = load_module(YTDATA_PATH, "ytdata_verdict_test")
+
+    def test_match_classifies_title_from_file_slug(self):
+        mod = load_module(self.match_path, "match_classify_test")
+        hooks = mod.load_hooks()
+        # The Question pattern — starts with what/why/how + trailing ?
+        name, hits = mod.classify("What if Earth stopped for 1 second?", hooks)
+        self.assertEqual(name, "The Question")
+        self.assertGreaterEqual(hits, 2)
+
+    def test_match_flags_no_formula(self):
+        mod = load_module(self.match_path, "match_unclassified_test")
+        hooks = mod.load_hooks()
+        results = mod.score_title("a random string with nothing", hooks)
+        self.assertEqual(results, [])
+
+    def test_match_cli_channel_input(self):
+        mod = load_module(self.match_path, "match_cli_test")
+        import io
+        import unittest.mock as mu
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump([{"title": "Why do channels die?"}, {"title": "I will show you the exact formula on screen"}], f)
+            p = f.name
+        try:
+            out = io.StringIO()
+            with mu.patch("sys.argv", ["match.py", "--channel", p, "--json"]):
+                with mu.patch("sys.stdout", out):
+                    mod.main()
+            data = json.loads(out.getvalue())
+            self.assertEqual(len(data), 2)
+            # first is The Question-ish (why + ?), second The Reveal
+            self.assertEqual(data[0]["matches"][0]["id"], "the-question")
+            self.assertEqual(data[1]["matches"][0]["id"], "the-reveal")
+        finally:
+            os.unlink(p)
+
+    def test_preview_truncation_flags(self):
+        mod = load_module(self.preview_path, "preview_test")
+        surfaces = mod.render("What if the sun went out for twenty four long hours on this very planet Earth?")
+        by_name = {s["surface"]: s for s in surfaces}
+        self.assertFalse(by_name["shorts"]["truncated"])
+        self.assertTrue(by_name["search_mobile"]["truncated"])
+
+    def test_preview_exact_budget_not_truncated(self):
+        mod = load_module(self.preview_path, "preview_exact_test")
+        surfaces = mod.render("t" * 40)
+        by_name = {s["surface"]: s for s in surfaces}
+        self.assertFalse(by_name["search_mobile"]["truncated"])
+
+    def test_verdict_go_high_opp_low_diff(self):
+        argv = ["ytdata", "verdict", "test seed", "--opportunity", "100", "--competition", "25", "--json"]
+        import unittest.mock as mu
+        import io
+        out = io.StringIO()
+        with mu.patch("sys.argv", argv), mu.patch("sys.stdout", out):
+            self.ytdata.main()
+        d = json.loads(out.getvalue())
+        self.assertEqual(d["verdict"], "GO")
+
+    def test_verdict_skip_high_diff(self):
+        import unittest.mock as mu
+        import io
+        argv = ["ytdata", "verdict", "test seed", "--opportunity", "40", "--competition", "80", "--json"]
+        out = io.StringIO()
+        with mu.patch("sys.argv", argv), mu.patch("sys.stdout", out):
+            self.ytdata.main()
+        self.assertEqual(json.loads(out.getvalue())["verdict"], "SKIP")
+
+    def test_verdict_requires_numbers(self):
+        import unittest.mock as mu
+        import io
+        argv = ["ytdata", "verdict", "test seed"]
+        with mu.patch("sys.argv", argv):
+            with self.assertRaises(SystemExit) as cm:
+                self.ytdata.main()
+        self.assertNotEqual(cm.exception.code, 0)
 
 
 if __name__ == "__main__":

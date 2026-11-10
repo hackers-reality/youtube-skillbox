@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.12] - 2026-11-10
+
+### Added
+- **`verdict` (ytdata)** — one measured GO/MAYBE/SKIP call from an opportunity + competition pair (e.g. from `keywords --json` and `compete --json`). Refuses to invent numbers; classifies deterministically and labels the output heuristic, not a ranking prediction
+- **`preview.py` (yt-package)** — renders a title exactly as it truncates on desktop search / mobile / suggested / Shorts; flags clipping; `--html` writes a self-contained preview page. Text rendering only — no thumbnail pixels, no ranking or CTR claims
+- **`match.py` (yt-script)** — matches titles against the 21 hook formulas in `hooks.json` and ranks them by pattern hits (`--channel` reads a `channel.json`, or pass `--hook` / a titles file). A shape classifier, not a guarantee
+
+### Tests
+- 171 tests (was 163): verdict decision logic, preview truncation flags/budgets, match classification + CLI end-to-end
+
 ## [0.4.11] - 2026-11-10
 
 ### Fixed

@@ -32,6 +32,7 @@ python scripts/ytdata.py posts "@handle" --limit 30
 python scripts/ytdata.py shows "@handle"
 python scripts/ytdata.py playlist "<playlist-url>" --limit 20
 python scripts/ytdata.py info "<video-url-or-id>"
+python scripts/ytdata.py verdict "seed keyword" --opportunity N --competition N --json
 ```
 
 ### Linux/macOS (bash/zsh):
@@ -47,6 +48,7 @@ python scripts/ytdata.py posts "@handle" --limit 30
 python scripts/ytdata.py shows "@handle"
 python scripts/ytdata.py playlist "<playlist-url>" --limit 20
 python scripts/ytdata.py info "<video-url-or-id>"
+python scripts/ytdata.py verdict "seed keyword" --opportunity N --competition N --json
 ```
 
 ### Critical Syntax Rules:
@@ -74,6 +76,7 @@ Accepts `@handles`, full channel/playlist URLs, or bare video IDs.
 | `shows` | A channel's Shows — title, episode count, URL (only some channels have a Shows tab) |
 | `playlist` | Every video in a playlist — title, duration, views |
 | `info` | One video's full stats: views, likes, subscribers, upload date, duration, tags, categories, description |
+| `verdict` | One keyword GO/MAYBE/SKIP call from measured opportunity + competition (e.g. `--opportunity 100 --competition 25`) |
 
 > **How `posts` and `home` work:** yt-dlp can't read the community tab (returns 0 entries) or the Home tab ("no home tab"), so these bypass it with a raw scrape of YouTube's own `ytInitialData` page data. `posts` tries `/posts` first (works everywhere tested; `/community` sometimes says "isn't available"), then **paginates via Innertube continuation POSTs** — the same request the browser makes when you scroll the feed. `home` parses the Home tab's shelves directly. Pure `urllib`, no API key, no credits.
 

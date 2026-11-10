@@ -28,7 +28,12 @@ Two tools live in this folder and both actually run. Use them. Do not eyeball th
 ```bash
 python3 hookscore.py hooks.txt              # rank your hook options
 python3 hookscore.py --hook "one line"      # score a single one
+python3 scripts/match.py titles.txt         # tag each title with its hook formula
+python3 scripts/match.py --channel channel.json --json   # classify a channel's titles
+python3 scripts/match.py --hook "What if the moon stopped?" --json
 ```
+
+`match.py` matches titles against the 21 patterns in `hooks.json` and ranks them. It is a **shape classifier, not a guarantee** — a title matching "The Question" still dies if the payoff is missing. Use it to audit a channel's library or to label your own next-batch before you record.
 
 ## Before you write
 
