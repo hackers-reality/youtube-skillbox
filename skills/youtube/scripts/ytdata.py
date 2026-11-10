@@ -82,27 +82,28 @@ def _fetch_video_detail(vid, timeout=30):
 def _fetch_many_details(vids, timeout=90):
     """ONE yt-dlp process for many videos (replaces 18 sequential spawns).
 
-    `yt-dlp --dump-json url1 url2 ...` emits one JSON object per input in a
-    single spawn — ~8s total vs 18×8s throttled. Returns {vid: dict}.
+    Uses `yt-dlp --print "%(id)s|%(duration)s"` — outputs NOTHING but one
+    line per video, so 18 videos finish in seconds instead of the many
+    minutes the huge `--dump-json` payload needs. Returns {vid: dict}.
     """
     if not vids:
         return {}
     urls = [f"https://www.youtube.com/watch?v={v}" for v in vids]
-    proc = run_ytdlp(["--skip-download", "--dump-json"] + urls, timeout=timeout)
+    proc = run_ytdlp(["--skip-download", "--print", "%(id)s|%(duration)s",
+                      "--no-warnings", "--no-playlist"] + urls, timeout=timeout)
     if getattr(proc, "returncode", 1) != 0 or not proc.stdout.strip():
         return {}
     out = {}
     for line in proc.stdout.splitlines():
         line = line.strip()
-        if not line.startswith("{"):
+        if not line or "|" not in line:
             continue
+        vid, _, dur = line.partition("|")
+        vid = vid.strip()
         try:
-            d = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        vid = d.get("id")
-        if vid:
-            out[vid] = d
+            out[vid] = {"duration": float(dur.strip())}
+        except ValueError:
+            out[vid] = {"duration": None}
     return out
 
 

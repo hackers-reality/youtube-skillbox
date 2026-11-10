@@ -455,7 +455,7 @@ def main():
     parser.add_argument("--threshold", type=float, default=5.0, help="Cliff detection threshold (percent drop)")
     parser.add_argument("--json", action="store_true", help="Output JSON")
     parser.add_argument("--duration", type=int,
-                        help="Video duration in seconds (converts % positions to seconds). "
+                        help="Video duration in seconds (converts percent positions to seconds). "
                              "Get it from the video metadata (ytdata info duration_seconds / "
                              "transcript metadata duration_seconds). WITHOUT it, timings are "
                              "reported as percentages ONLY — never as seconds.")

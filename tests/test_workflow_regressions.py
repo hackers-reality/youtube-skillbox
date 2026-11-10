@@ -517,6 +517,17 @@ class TestRetentionAbsoluteSemantics(unittest.TestCase):
         self.assertTrue(hook["absolute_retention"])
 
 
+class TestRetentionHelpText(unittest.TestCase):
+    def test_retention_help_does_not_crash_on_percent_symbols(self):
+        import subprocess as sp
+        import sys
+        proc = sp.run([sys.executable, RETENTION_PATH, "--help"],
+                      capture_output=True, text=True, encoding="utf-8", errors="replace")
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("duration", proc.stdout.lower())
+        self.assertIn("csv", proc.stdout.lower())
+
+
 class TestYtdataEnrichmentExplicit(unittest.TestCase):
     def setUp(self):
         self.ytdata = load_module(YTDATA_PATH, "ytdata_explicit_test")
