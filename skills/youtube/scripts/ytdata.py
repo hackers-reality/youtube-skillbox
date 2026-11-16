@@ -59,12 +59,49 @@ class _YtdlpTimeoutProc:
         self.stderr = f"yt-dlp timed out after {timeout}s"
 
 
-def run_ytdlp(args, timeout=60):
-    cmd = [sys.executable, "-m", "yt_dlp"] + args + ["--no-warnings", "--no-write-thumbnail"]
+def _ytdlp_fallback(args, timeout=60):
+    """Frozen build: yt-dlp can't be spawned as a subprocess — sys.executable is
+    this binary, not Python. Run it in-process and hand back a fake completed process."""
+    binary = getattr(sys, "frozen", False)
+    if not binary:
+        cmd = [sys.executable, "-m", "yt_dlp"] + args + ["--no-warnings", "--no-write-thumbnail"]
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return _YtdlpTimeoutProc(timeout)
+
+    # Frozen: invoke yt_dlp in-process, capture stdout into a string.
+    import io
+
+    from yt_dlp import main as _ytdlp_main
+
+    _old_out = sys.stdout
+    sys.stdout = io.StringIO()
+    _old_argv = sys.argv
+    sys.argv = ["yt_dlp"] + args + ["--no-warnings", "--no-write-thumbnail"]
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return _YtdlpTimeoutProc(timeout)
+        _ytdlp_main()
+    except SystemExit:
+        pass
+    except Exception:
+        pass  # yt-dlp writes errors to stderr; stdout is what the engine parses
+    finally:
+        out = sys.stdout.getvalue()
+        sys.stdout = _old_out
+        sys.argv = _old_argv
+
+    class _P:
+        pass
+
+    p = _P()
+    p.stdout = out
+    p.stderr = ""
+    p.returncode = 0
+    return p
+
+
+def run_ytdlp(args, timeout=60):
+    return _ytdlp_fallback(args, timeout=timeout)
 
 
 def _fetch_video_detail(vid, timeout=30):
@@ -1326,7 +1363,7 @@ def cmd_scorecard(a):
             "score": score,
             "checks": [{"name": n, "weight": w, "pass": ok, "detail": d}
                        for n, w, ok, d in checks]
-        }, ensure_ascii=False, indent=2)))
+        }), ensure_ascii=False, indent=2))
         return
 
     print(f"SEO Scorecard for {vid}" + (f"  (target: {a.keyword})" if a.keyword else "") + f"\n")
@@ -1494,8 +1531,8 @@ def cmd_outliers(a):
 
     if a.json:
         print(json.dumps(_strip_nulls({"channel": base, "subscribers": subs,
-                          "min_ratio": a.min_ratio, "outliers": outliers},
-                         ensure_ascii=False, indent=2)))
+                          "min_ratio": a.min_ratio, "outliers": outliers}),
+                         ensure_ascii=False, indent=2))
         return
 
     if not outliers:
@@ -1608,7 +1645,7 @@ def cmd_gap(a):
             "only_me": [k for kw, k in my_kws.items() if kw not in comp_tags][:a.limit],
             "only_them": [kw for kw in comp_tags if kw not in my_kws][:a.limit],
             "both": [k for kw, k in my_kws.items() if kw in comp_tags][:a.limit],
-        }, ensure_ascii=False, indent=2)))
+        }), ensure_ascii=False, indent=2))
         return
 
     only_me = [k for kw, k in my_kws.items() if kw not in comp_tags][:a.limit]
@@ -1826,7 +1863,7 @@ def cmd_keywords(a):
         print(json.dumps(_strip_nulls({"seed": seed, "gl": a.gl, "hl": a.hl, "sources": sorted(use),
                           "kl": kl, "queries": len(queries), "unique": len(stats),
                           "score_meaning": "opportunity",
-                          "keywords": rows}, ensure_ascii=False, indent=2)))
+                          "keywords": rows}), ensure_ascii=False, indent=2))
         return
     print(f'Keyword ideas for "{seed}" — {len(stats)} unique from {len(queries)} queries '
           f'(gl={a.gl} hl={a.hl}, sources: {",".join(sorted(use))})')
@@ -1899,8 +1936,8 @@ def cmd_trends(a):
 
     if a.json:
         print(json.dumps(_strip_nulls({"seed": a.seed, "gl": a.gl, "hl": a.hl,
-                          "window_days": a.days, "keywords": all_kw},
-                         ensure_ascii=False, indent=2)))
+                          "window_days": a.days, "keywords": all_kw}),
+                         ensure_ascii=False, indent=2))
         return
 
     print(f'Trend for "{a.seed}"  (gl={a.gl} hl={a.hl}'
@@ -2143,8 +2180,8 @@ def cmd_compete(a):
 
     if a.json:
         print(json.dumps(_strip_nulls({"keyword": q, "gl": a.gl, "hl": a.hl, **stats,
-                          "advice": _compete_advice(stats)},
-                         ensure_ascii=False, indent=2)))
+                          "advice": _compete_advice(stats)}),
+                         ensure_ascii=False, indent=2))
         return
 
     print(f'Competition for "{q}" — top {stats["scored"]}  (gl={a.gl} hl={a.hl})\n')
@@ -2282,8 +2319,8 @@ def cmd_track(a):
 
     if a.json:
         print(json.dumps(_strip_nulls({"keyword": q, "video": vid, "rank": rank, "gl": a.gl, "hl": a.hl,
-                          "previous": prev, "history": history + log[-1:]},
-                         ensure_ascii=False, indent=2)))
+                          "previous": prev, "history": history + log[-1:]}),
+                         ensure_ascii=False, indent=2))
         return
 
     pos = f"#{rank}" if rank else f"not in top {a.top}"

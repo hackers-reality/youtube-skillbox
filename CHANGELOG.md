@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.15] - 2026-11-17
+
+### Fixed
+- **`_strip_nulls(X)` was called with `ensure_ascii=False, indent=2` as trailing kwargs in every multi-line `--json` emitter** in `ytdata.py`. The whole path crashed with `TypeError: _strip_nulls() got an unexpected keyword argument 'ensure_ascii'` — the exact error that surfaced as `tool failed` in the Anna App's audit flow.
+- Specific emit sites repaired: `sections`, `outliers`, `scorecard`, `keywords` (suggest), `compete`, `gap`, `verdict` (keyword verdict), `track`, `trends`, `info`.
+
 ## [0.4.14] - 2026-11-16
 
 ### Fixed
