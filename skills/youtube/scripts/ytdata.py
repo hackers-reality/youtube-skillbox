@@ -192,6 +192,18 @@ def _http_get(url):
         return r.read().decode("utf-8", "replace")
 
 
+def _strip_nulls(obj):
+    """Recursively drop keys whose value is None; keep 0/False/[].
+    The engine still emits its full schema internally so callers know the
+    key, but --json stdout should not contain noise. Continuation POSTs
+    and non-print() JSON are intentionally untouched."""
+    if isinstance(obj, dict):
+        return {k: _strip_nulls(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [_strip_nulls(v) for v in obj]
+    return obj
+
+
 def _extract_ytInitialData(html):
     """Pull the ytInitialData blob. YouTube serves it as `var ytInitialData`,
     `window["ytInitialData"]`, etc. — try every known form."""
@@ -614,7 +626,7 @@ def cmd_posts(a):
     uniq = uniq[: a.limit]
 
     if a.json:
-        print(json.dumps(uniq, ensure_ascii=False, indent=2))
+        print(json.dumps(_strip_nulls(uniq), ensure_ascii=False, indent=2))
         return
     if not uniq:
         print("No community posts found (channel may have none, or the tab layout changed).")
@@ -694,7 +706,7 @@ def slim(e):
 
 def print_list(items, as_json):
     if as_json:
-        print(json.dumps(items, ensure_ascii=False, indent=2))
+        print(json.dumps(_strip_nulls(items), ensure_ascii=False, indent=2))
         return
     for i, it in enumerate(items, 1):
         dur = it.get("duration_string", "?")
@@ -807,7 +819,7 @@ def cmd_sections(a):
         result["_errors"] = errors
 
     if a.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(_strip_nulls(result), ensure_ascii=False, indent=2))
         return
 
     def fmt(v, none="no tab"):
@@ -870,7 +882,7 @@ def cmd_shows(a):
         })
     items = items[: a.limit]
     if a.json:
-        print(json.dumps(items, ensure_ascii=False, indent=2))
+        print(json.dumps(_strip_nulls(items), ensure_ascii=False, indent=2))
         return
     if not items:
         print("No Shows tab on this channel (only some channels have one).")
@@ -1014,7 +1026,7 @@ def cmd_home(a):
                                   for k, i, t, u in items]})
 
     if a.json:
-        print(json.dumps(out, ensure_ascii=False, indent=2))
+        print(json.dumps(_strip_nulls(out), ensure_ascii=False, indent=2))
         return
     if not out:
         print("No home sections found (tab layout may have changed).")
@@ -1162,7 +1174,7 @@ def cmd_profile(a):
     }
     
     if a.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(json.dumps(_strip_nulls(payload), ensure_ascii=False, indent=2))
         return
     
     for k, v in payload.items():
@@ -1197,7 +1209,7 @@ def cmd_info(a):
         "description": (d.get("description") or "")[:800] or None,
     }
     if a.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(json.dumps(_strip_nulls(payload), ensure_ascii=False, indent=2))
         return
     for k, v in payload.items():
         if v is not None:
@@ -1308,13 +1320,13 @@ def cmd_scorecard(a):
     score, checks = _scorecard_checks(info, a.keyword)
 
     if a.json:
-        print(json.dumps({
+        print(json.dumps(_strip_nulls({
             "video_id": vid,
             "target_keyword": a.keyword,
             "score": score,
             "checks": [{"name": n, "weight": w, "pass": ok, "detail": d}
                        for n, w, ok, d in checks]
-        }, ensure_ascii=False, indent=2))
+        }, ensure_ascii=False, indent=2)))
         return
 
     print(f"SEO Scorecard for {vid}" + (f"  (target: {a.keyword})" if a.keyword else "") + f"\n")
@@ -1481,9 +1493,9 @@ def cmd_outliers(a):
     outliers.sort(key=lambda x: -x["ratio"])
 
     if a.json:
-        print(json.dumps({"channel": base, "subscribers": subs,
+        print(json.dumps(_strip_nulls({"channel": base, "subscribers": subs,
                           "min_ratio": a.min_ratio, "outliers": outliers},
-                         ensure_ascii=False, indent=2))
+                         ensure_ascii=False, indent=2)))
         return
 
     if not outliers:
@@ -1588,7 +1600,7 @@ def cmd_gap(a):
     comp_tags = [t.lower() for t in meta.get("keywords", "").split(", ")] if meta.get("keywords") else []
 
     if a.json:
-        print(json.dumps({
+        print(json.dumps(_strip_nulls({
             "seed": a.seed,
             "competitor": base,
             "my_keywords": list(my_kws.values())[:a.limit],
@@ -1596,7 +1608,7 @@ def cmd_gap(a):
             "only_me": [k for kw, k in my_kws.items() if kw not in comp_tags][:a.limit],
             "only_them": [kw for kw in comp_tags if kw not in my_kws][:a.limit],
             "both": [k for kw, k in my_kws.items() if kw in comp_tags][:a.limit],
-        }, ensure_ascii=False, indent=2))
+        }, ensure_ascii=False, indent=2)))
         return
 
     only_me = [k for kw, k in my_kws.items() if kw not in comp_tags][:a.limit]
@@ -1811,10 +1823,10 @@ def cmd_keywords(a):
     _append_trend_log(seed, a.gl, a.hl, rows)
 
     if a.json:
-        print(json.dumps({"seed": seed, "gl": a.gl, "hl": a.hl, "sources": sorted(use),
+        print(json.dumps(_strip_nulls({"seed": seed, "gl": a.gl, "hl": a.hl, "sources": sorted(use),
                           "kl": kl, "queries": len(queries), "unique": len(stats),
                           "score_meaning": "opportunity",
-                          "keywords": rows}, ensure_ascii=False, indent=2))
+                          "keywords": rows}, ensure_ascii=False, indent=2)))
         return
     print(f'Keyword ideas for "{seed}" — {len(stats)} unique from {len(queries)} queries '
           f'(gl={a.gl} hl={a.hl}, sources: {",".join(sorted(use))})')
@@ -1886,9 +1898,9 @@ def cmd_trends(a):
             all_kw.setdefault(kw["k"], []).append((e["ts"], kw["s"], kw["yt"], kw["ddg"], kw["pos"], kw["Y"], kw["Q"]))
 
     if a.json:
-        print(json.dumps({"seed": a.seed, "gl": a.gl, "hl": a.hl,
+        print(json.dumps(_strip_nulls({"seed": a.seed, "gl": a.gl, "hl": a.hl,
                           "window_days": a.days, "keywords": all_kw},
-                         ensure_ascii=False, indent=2))
+                         ensure_ascii=False, indent=2)))
         return
 
     print(f'Trend for "{a.seed}"  (gl={a.gl} hl={a.hl}'
@@ -2130,9 +2142,9 @@ def cmd_compete(a):
         sys.exit(1)
 
     if a.json:
-        print(json.dumps({"keyword": q, "gl": a.gl, "hl": a.hl, **stats,
+        print(json.dumps(_strip_nulls({"keyword": q, "gl": a.gl, "hl": a.hl, **stats,
                           "advice": _compete_advice(stats)},
-                         ensure_ascii=False, indent=2))
+                         ensure_ascii=False, indent=2)))
         return
 
     print(f'Competition for "{q}" — top {stats["scored"]}  (gl={a.gl} hl={a.hl})\n')
@@ -2209,7 +2221,7 @@ def cmd_verdict(a):
     }
 
     if a.json:
-        print(json.dumps(card, indent=2, ensure_ascii=False))
+        print(json.dumps(_strip_nulls(card), indent=2, ensure_ascii=False))
         return
 
     print(f'Keyword verdict: "{q}"  (gl={a.gl} hl={a.hl})')
@@ -2269,9 +2281,9 @@ def cmd_track(a):
         json.dump(log, f, ensure_ascii=False, indent=2)
 
     if a.json:
-        print(json.dumps({"keyword": q, "video": vid, "rank": rank, "gl": a.gl, "hl": a.hl,
+        print(json.dumps(_strip_nulls({"keyword": q, "video": vid, "rank": rank, "gl": a.gl, "hl": a.hl,
                           "previous": prev, "history": history + log[-1:]},
-                         ensure_ascii=False, indent=2))
+                         ensure_ascii=False, indent=2)))
         return
 
     pos = f"#{rank}" if rank else f"not in top {a.top}"

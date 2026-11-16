@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.14] - 2026-11-16
+
+### Fixed
+- **`--json` output no longer contains `null` values.** The engine emits its full schema for consumers that probe for key-existence; endpoints now strip `None` RECURSIVELY across every `--json` payload so scripts see only *measured* values. Tab counts for absent tabs are omitted entirely rather than `null`.
+- `enrichment_summary` preserved (budget diagnostics still available).
+- Matches the Anna App executa-side behaviour, making `pip install youtube-skillbox >= 0.4.14` output safe to print/copy without post-processing.
+
 ## [0.4.13] - 2026-11-10
 
 ### Fixed
